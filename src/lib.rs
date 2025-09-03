@@ -7,4 +7,7 @@
 
 #![warn(missing_docs)]
 
+pub(crate) mod clip;
+
+pub(crate) mod collections;
 pub(crate) mod math;
