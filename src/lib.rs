@@ -1,14 +1,10 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Approximate Convex Decomposition for 3D Meshes
+//! with Collision-Aware Concavity and Tree Search.
+//!
+//! # References
+//!
+//! - [Approximate Convex Decomposition for 3D Meshes with Collision-Aware Concavity and Tree Search](https://colin97.github.io/CoACD/) by Xinyue Wei, Minghua Liu, Zhan Ling, Hao Su
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#![warn(missing_docs)]
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub(crate) mod math;
