@@ -52,9 +52,12 @@ impl Plane {
         }
     }
 
-    /// Checks if the line segment from `p0` to `p1` intersects the plane within a given tolerance.
+    /// Computes the intersection point of a line segment with the plane.
+    ///
+    /// Returns `Some(point)` if the segment intersects the plane within the segment bounds,
+    /// otherwise returns `None`.
     #[inline]
-    pub fn intersects_segment(&self, p0: Vec3A, p1: Vec3A, tolerance: f32) -> bool {
+    pub fn intersect_segment(&self, p0: Vec3A, p1: Vec3A, tolerance: f32) -> Option<Vec3A> {
         let plane_normal = Vec3A::new(self.a, self.b, self.c);
         let dir = p1 - p0;
 
@@ -62,13 +65,16 @@ impl Plane {
 
         if denom.abs() < f32::EPSILON {
             // The segment is parallel to the plane.
-            return false;
+            return None;
         }
 
         // Check if the intersection point is within the segment bounds.
-        // Note: The intersection point is given by p0 + t * dir.
         let t = -(plane_normal.dot(p0) + self.d) / denom;
-        t >= -tolerance && t <= 1.0 + tolerance
+        if t >= -tolerance && t <= 1.0 + tolerance {
+            Some(p0 + t * dir)
+        } else {
+            None
+        }
     }
 }
 
