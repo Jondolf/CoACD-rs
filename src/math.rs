@@ -25,6 +25,17 @@ pub enum PlaneSide {
 }
 
 impl Plane {
+    /// Creates a new plane from a normal vector and a distance from the origin.
+    #[inline]
+    pub fn new(normal: Vec3A, d: f32) -> Self {
+        Self {
+            a: normal.x,
+            b: normal.y,
+            c: normal.z,
+            d,
+        }
+    }
+
     /// Determines which side of the plane a triangle's normal points to.
     ///
     /// If any component of the normal is positive, the triangle is considered to be

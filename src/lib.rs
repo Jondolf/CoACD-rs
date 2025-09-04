@@ -7,11 +7,12 @@
 
 #![warn(missing_docs)]
 
-pub(crate) mod clip;
+pub mod clip;
 
 pub(crate) mod collections;
 pub(crate) mod math;
 
+pub use math::{Plane, PlaneSide};
 pub use obvhs::aabb::Aabb;
 
 use glam::Vec3A;

@@ -6,7 +6,7 @@ use spade::{ConstrainedDelaunayTriangulation, Point2, Triangulation};
 use crate::{
     Aabb, IndexedMesh,
     collections::{HashMap, HashSet},
-    math::{Plane, PlaneSide},
+    math::{Plane, PlaneSide, triangle_area},
 };
 
 // TODO: Scaling factor to tune thresholds to different mesh sizes?
@@ -125,17 +125,29 @@ pub fn triangulation(
         max = max.max(local_p);
     }
 
-    let triangulation =
-        ConstrainedDelaunayTriangulation::<Point2<f32>>::bulk_load_cdt(points, border_edges)
-            .map_err(|_| TriangulationError::TriangulationFailed)?;
+    let triangulation = ConstrainedDelaunayTriangulation::<Point2<f32>>::bulk_load_cdt(
+        points,
+        border_edges
+            .iter()
+            // TODO: This is silly
+            .map(|&[v0, v1]| [v0 - 1, v1 - 1])
+            .collect(),
+    )
+    .map_err(|_| TriangulationError::TriangulationFailed)?;
 
     let mut border_triangles = Vec::with_capacity(triangulation.num_inner_faces());
     for face in triangulation.inner_faces() {
-        border_triangles.push(face.vertices().map(|v| v.index()));
+        border_triangles.push(face.vertices().map(|v| v.index() + 1));
     }
 
-    // TODO: Here, the C++ implementation has a loop to add more points to the border,
-    //       it doesn't seem to actually iterate over anything? Double-check this.
+    // TODO: Fix this
+    for vertex in triangulation.vertices().skip(border.len()) {
+        let p = vertex.position();
+        let local_p = Vec3A::new(p.x, p.y, 0.0);
+        let world_p = affine.inverse().transform_point3a(local_p);
+        unimplemented!("Not implemented");
+    }
+
     debug_assert_eq!(border.len(), triangulation.num_vertices());
 
     Ok(border_triangles)
@@ -173,14 +185,6 @@ pub fn remove_outlier_triangles(
             if p0.abs_diff_eq(p1, COINCIDENT_EPSILON) {
                 overlap_set.insert(j + 1);
             }
-        }
-    }
-
-    // Find true border edges that have no duplicates with reversed direction.
-    for [v0, v1] in border_edges.iter().copied() {
-        if !same_edge_set.contains(&[v1, v0]) {
-            border_set.insert([v0, v1]);
-            border_set.insert([v1, v0]);
         }
     }
 
@@ -238,7 +242,7 @@ pub fn remove_outlier_triangles(
 
     let mut i = 0;
     while let Some([v0, v1]) = bfs_edges.pop_front() {
-        let mut idx = 0;
+        let mut idx: isize;
         let e01 = [v0, v1];
         let e10 = [v1, v0];
         if i < border_edges.len()
@@ -420,7 +424,6 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
 
     let mut border: Vec<Vec3A> = Vec::new();
     let mut border_edges: Vec<[usize; 2]> = Vec::new();
-    let mut border_triangles: Vec<[isize; 3]> = Vec::new();
     let mut overlap: Vec<Vec3A> = Vec::new();
     let mut border_map: HashMap<usize, usize> = HashMap::new();
 
@@ -481,29 +484,29 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                 if side0 == PlaneSide::Front && side1 == PlaneSide::OnPlane {
                     add_point(&mut vertex_map, &mut border, p1, id1, &mut idx);
                     add_point(&mut vertex_map, &mut border, p2, id2, &mut idx);
-                    if vertex_map.get(&id1) != vertex_map.get(&id2) {
-                        border_edges.push([
-                            *vertex_map.get(&id1).unwrap() + 1,
-                            *vertex_map.get(&id2).unwrap() + 1,
-                        ]);
+                    if let Some(v1) = vertex_map.get(&id1)
+                        && let Some(v2) = vertex_map.get(&id2)
+                        && v1 != v2
+                    {
+                        border_edges.push([*v1 + 1, *v2 + 1]);
                     }
                 } else if side1 == PlaneSide::Front && side0 == PlaneSide::OnPlane {
                     add_point(&mut vertex_map, &mut border, p2, id2, &mut idx);
                     add_point(&mut vertex_map, &mut border, p0, id0, &mut idx);
-                    if vertex_map.get(&id2) != vertex_map.get(&id0) {
-                        border_edges.push([
-                            *vertex_map.get(&id2).unwrap() + 1,
-                            *vertex_map.get(&id0).unwrap() + 1,
-                        ]);
+                    if let Some(v2) = vertex_map.get(&id2)
+                        && let Some(v0) = vertex_map.get(&id0)
+                        && v2 != v0
+                    {
+                        border_edges.push([*v2 + 1, *v0 + 1]);
                     }
                 } else if side2 == PlaneSide::Front && side1 == PlaneSide::OnPlane {
                     add_point(&mut vertex_map, &mut border, p0, id0, &mut idx);
                     add_point(&mut vertex_map, &mut border, p1, id1, &mut idx);
-                    if vertex_map.get(&id0) != vertex_map.get(&id1) {
-                        border_edges.push([
-                            *vertex_map.get(&id0).unwrap() + 1,
-                            *vertex_map.get(&id1).unwrap() + 1,
-                        ]);
+                    if let Some(v0) = vertex_map.get(&id0)
+                        && let Some(v1) = vertex_map.get(&id1)
+                        && v0 != v1
+                    {
+                        border_edges.push([*v0 + 1, *v1 + 1]);
                     }
                 }
             }
@@ -524,29 +527,29 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                 if side0 == PlaneSide::Back && side1 == PlaneSide::OnPlane {
                     add_point(&mut vertex_map, &mut border, p2, id2, &mut idx);
                     add_point(&mut vertex_map, &mut border, p1, id1, &mut idx);
-                    if vertex_map.get(&id2) != vertex_map.get(&id1) {
-                        border_edges.push([
-                            *vertex_map.get(&id2).unwrap() + 1,
-                            *vertex_map.get(&id1).unwrap() + 1,
-                        ]);
+                    if let Some(v2) = vertex_map.get(&id2)
+                        && let Some(v1) = vertex_map.get(&id1)
+                        && v2 != v1
+                    {
+                        border_edges.push([*v2 + 1, *v1 + 1]);
                     }
                 } else if side1 == PlaneSide::Back && side0 == PlaneSide::OnPlane {
                     add_point(&mut vertex_map, &mut border, p0, id0, &mut idx);
                     add_point(&mut vertex_map, &mut border, p2, id2, &mut idx);
-                    if vertex_map.get(&id2) != vertex_map.get(&id0) {
-                        border_edges.push([
-                            *vertex_map.get(&id0).unwrap() + 1,
-                            *vertex_map.get(&id2).unwrap() + 1,
-                        ]);
+                    if let Some(v0) = vertex_map.get(&id0)
+                        && let Some(v2) = vertex_map.get(&id2)
+                        && v0 != v2
+                    {
+                        border_edges.push([*v0 + 1, *v2 + 1]);
                     }
                 } else if side2 == PlaneSide::Back && side0 == PlaneSide::OnPlane {
                     add_point(&mut vertex_map, &mut border, p1, id1, &mut idx);
                     add_point(&mut vertex_map, &mut border, p0, id0, &mut idx);
-                    if vertex_map.get(&id1) != vertex_map.get(&id0) {
-                        border_edges.push([
-                            *vertex_map.get(&id1).unwrap() + 1,
-                            *vertex_map.get(&id0).unwrap() + 1,
-                        ]);
+                    if let Some(v1) = vertex_map.get(&id1)
+                        && let Some(v0) = vertex_map.get(&id0)
+                        && v1 != v0
+                    {
+                        border_edges.push([*v1 + 1, *v0 + 1]);
                     }
                 }
             }
@@ -757,6 +760,11 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                             (-1 * id_pi2 - 1) as isize,
                             (-1 * id_pi0 - 1) as isize,
                         ]);
+                        positive_indices.push([
+                            (-1 * id_pi2 - 1) as isize,
+                            id1 as isize,
+                            id2 as isize,
+                        ]);
                     } else {
                         positive_map[id1] = true;
                         positive_map[id2] = true;
@@ -919,12 +927,12 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
         }
     }
 
-    let mut final_border = Vec::new();
-    let mut final_triangles = Vec::new();
+    let final_border: Vec<Vec3A>;
+    let mut final_triangles: Vec<[usize; 3]> = Vec::new();
     let mut cut_area: f32;
 
     if border.len() > 2 {
-        // TODO: Avoid thisw clone.
+        // TODO: Avoid this clone.
         match triangulation(plane, &border, border_edges.clone()) {
             Ok(mut triangulation) => {
                 let result = remove_outlier_triangles(
@@ -932,7 +940,7 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                     &overlap,
                     &border_edges,
                     &mut triangulation,
-                    &mut vertex_map,
+                    &mut border_map,
                 );
                 final_border = result.border;
                 final_triangles = result.border_triangles;
@@ -1023,6 +1031,25 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
         } else {
             -1 * *id2 + neg_n - 1
         };
+    }
+
+    // Add the cut triangles.
+    for [id0, id1, id2] in final_triangles.iter() {
+        positive_indices.push([
+            *border_map.get(id0).unwrap() as isize + pos_n - 1,
+            *border_map.get(id1).unwrap() as isize + pos_n - 1,
+            *border_map.get(id2).unwrap() as isize + pos_n - 1,
+        ]);
+        negative_indices.push([
+            *border_map.get(id2).unwrap() as isize + neg_n - 1,
+            *border_map.get(id1).unwrap() as isize + neg_n - 1,
+            *border_map.get(id0).unwrap() as isize + neg_n - 1,
+        ]);
+
+        let p0 = final_border[*id0 - 1];
+        let p1 = final_border[*id1 - 1];
+        let p2 = final_border[*id2 - 1];
+        cut_area += triangle_area(p0, p1, p2);
     }
 
     Some(ClipResult {
