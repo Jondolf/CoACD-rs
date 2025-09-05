@@ -97,12 +97,16 @@ pub fn compute_plane_transform(plane: &Plane, border: &[Vec3A]) -> Option<Affine
     })
 }
 
+/// Errors that can occur during border triangulation.
 pub enum TriangulationError {
+    /// Computing the plane transformation failed.
     PlaneTransformFailed,
-    TriangulationFailed,
+    /// A point's coordinates were too large, too small, or NaN.
+    InvalidCoordinate,
 }
 
-pub fn triangulation(
+/// Triangulates a border defined by a set of points and edges on a plane.
+fn triangulation(
     plane: &Plane,
     border: &[Vec3A],
     border_edges: Vec<[usize; 2]>,
@@ -133,7 +137,7 @@ pub fn triangulation(
             .map(|&[v0, v1]| [v0 - 1, v1 - 1])
             .collect(),
     )
-    .map_err(|_| TriangulationError::TriangulationFailed)?;
+    .map_err(|_| TriangulationError::InvalidCoordinate)?;
 
     let mut border_triangles = Vec::with_capacity(triangulation.num_inner_faces());
     for face in triangulation.inner_faces() {
@@ -153,13 +157,14 @@ pub fn triangulation(
     Ok(border_triangles)
 }
 
-pub struct RemoveOutliersResult {
-    pub border: Vec<Vec3A>,
-    pub border_triangles: Vec<[usize; 3]>,
+/// The result of removing outlier triangles from a border triangulation.
+struct RemoveOutliersResult {
+    border: Vec<Vec3A>,
+    border_triangles: Vec<[usize; 3]>,
 }
 
 // TODO: Reuse allocations
-pub fn remove_outlier_triangles(
+fn remove_outlier_triangles(
     border: &[Vec3A],
     overlap: &[Vec3A],
     border_edges: &[[usize; 2]],
@@ -1067,7 +1072,7 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
     })
 }
 
-/// Cast a vector of `isize` arrays to a vector of `usize` arrays.
+/// Casts a vector of `isize` arrays to a vector of `usize` arrays.
 fn cast_indices_isize_to_usize(vec: Vec<[isize; 3]>) -> Vec<[usize; 3]> {
     assert_eq!(core::mem::size_of::<isize>(), core::mem::size_of::<usize>());
     assert_eq!(
@@ -1083,6 +1088,7 @@ fn cast_indices_isize_to_usize(vec: Vec<[isize; 3]>) -> Vec<[usize; 3]> {
     unsafe { Vec::from_raw_parts(ptr as *mut [usize; 3], len, capacity) }
 }
 
+/// Add a point to the border if it is not already present.
 pub fn add_point(
     vertex_map: &mut HashMap<usize, usize>,
     border: &mut Vec<Vec3A>,
@@ -1104,6 +1110,7 @@ pub fn add_point(
     }
 }
 
+/// Add an edge point to the border if it is not already present.
 pub fn add_edge_point(
     edge_map: &mut HashMap<[usize; 2], isize>,
     border: &mut Vec<Vec3A>,
@@ -1129,3 +1136,5 @@ pub fn add_edge_point(
         }
     }
 }
+
+// TODO: Tests
