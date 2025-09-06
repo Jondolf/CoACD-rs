@@ -1,16 +1,10 @@
-use glam::Vec3A;
+use glam::{Vec3A, Vec4};
 
-// TODO: Use a `Vec4`?
-/// A plane in 3D space, defined by the equation ax + by + cz + d = 0.
+/// A plane in 3D space, defined by a normal vector and a distance from the origin.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Plane {
-    /// The `a` coefficient of the plane equation.
-    pub a: f32,
-    /// The `b` coefficient of the plane equation.
-    pub b: f32,
-    /// The `c` coefficient of the plane equation.
-    pub c: f32,
-    /// The `d` coefficient of the plane equation.
-    pub d: f32,
+    /// The normal vector and a signed distance from the origin.
+    normal_d: Vec4,
 }
 
 /// Represents the side of a plane.
@@ -25,28 +19,46 @@ pub enum PlaneSide {
 }
 
 impl Plane {
-    /// Creates a new plane from a normal vector and a distance from the origin.
+    /// Creates a new [`Plane`] from a normal vector and a signed distance from the origin.
     #[inline]
-    pub fn new(normal: Vec3A, d: f32) -> Self {
+    pub fn new(normal: impl Into<Vec3A>, d: f32) -> Self {
+        let normal = normal.into();
         Self {
-            a: normal.x,
-            b: normal.y,
-            c: normal.z,
-            d,
+            normal_d: normal.extend(d),
         }
     }
 
-    /// Creates a new plane from a point on the plane and a normal vector.
+    /// Creates a new [`Plane`] from a point on the plane and a normal vector.
     #[inline]
     pub fn from_point_and_normal(point: Vec3A, normal: Vec3A) -> Self {
         let d = -normal.dot(point);
         Self::new(normal, d)
     }
 
+    /// Creates a new [`Plane`] from the coefficients of the plane equation `ax + by + cz + d = 0`.
+    #[inline]
+    pub fn from_coefficients(a: f32, b: f32, c: f32, d: f32) -> Self {
+        Self {
+            normal_d: Vec4::new(a, b, c, d),
+        }
+    }
+
     /// Returns the normal vector of the plane.
     #[inline]
     pub fn normal(&self) -> Vec3A {
-        Vec3A::new(self.a, self.b, self.c)
+        Vec3A::from_vec4(self.normal_d)
+    }
+
+    /// Returns the signed distance from the origin to the plane.
+    #[inline]
+    pub fn d(&self) -> f32 {
+        self.normal_d.w
+    }
+
+    /// Returns the normal vector and the signed distance from the origin as a [`Vec4`].
+    #[inline]
+    pub fn normal_d(&self) -> Vec4 {
+        self.normal_d
     }
 
     /// Determines which side of the plane a triangle's normal points to.
@@ -56,7 +68,8 @@ impl Plane {
     #[inline]
     pub fn cut_side(&self, p0: Vec3A, p1: Vec3A, p2: Vec3A) -> PlaneSide {
         let normal = triangle_normal(p0, p1, p2);
-        if normal.x * self.a > 0.0 || normal.y * self.b > 0.0 || normal.z * self.c > 0.0 {
+        // TODO: Is this faster than just manually checking products of individual components?
+        if (normal * self.normal()).cmpgt(Vec3A::ZERO).any() {
             PlaneSide::Back
         } else {
             PlaneSide::Front
@@ -66,7 +79,7 @@ impl Plane {
     /// Returns which [`PlaneSide`] a point lies on.
     #[inline]
     pub fn side(&self, p: Vec3A, epsilon: f32) -> PlaneSide {
-        let res = self.a * p.x + self.b * p.y + self.c * p.z + self.d;
+        let res = self.normal().dot(p) + self.d();
         if res > epsilon {
             PlaneSide::Front
         } else if res < -epsilon {
@@ -82,7 +95,7 @@ impl Plane {
     /// otherwise returns `None`.
     #[inline]
     pub fn intersect_segment(&self, p0: Vec3A, p1: Vec3A, tolerance: f32) -> Option<Vec3A> {
-        let plane_normal = Vec3A::new(self.a, self.b, self.c);
+        let plane_normal = self.normal();
         let dir = p1 - p0;
 
         let denom = plane_normal.dot(dir);
@@ -93,7 +106,7 @@ impl Plane {
         }
 
         // Check if the intersection point is within the segment bounds.
-        let t = -(plane_normal.dot(p0) + self.d) / denom;
+        let t = -(plane_normal.dot(p0) + self.d()) / denom;
         if t >= -tolerance && t <= 1.0 + tolerance {
             Some(p0 + t * dir)
         } else {
