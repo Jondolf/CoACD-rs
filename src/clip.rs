@@ -122,7 +122,7 @@ fn triangulation(
     for p in border.iter().copied() {
         // It's enough to compute the `x` and `y` coordinates.
         // Would a custom transformation be more efficient?
-        let local_p = affine.transform_point3a(p).xy();
+        let local_p = affine.inverse().transform_point3a(p).xy();
         points.push(Point2::new(local_p.x, local_p.y));
 
         min = min.min(local_p);
@@ -149,7 +149,7 @@ fn triangulation(
         let p = vertex.position();
         let local_p = Vec3A::new(p.x, p.y, 0.0);
         let world_p = affine.inverse().transform_point3a(local_p);
-        unimplemented!("Not implemented");
+        todo!("Not implemented");
     }
 
     debug_assert_eq!(border.len(), triangulation.num_vertices());
@@ -426,6 +426,12 @@ pub struct ClipResult {
 /// Panics if the input `mesh` has more vertices than [`i32::MAX`].
 pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
     assert!(mesh.vertices.len() <= i32::MAX as usize);
+
+    // Four steps:
+    // 1. Find triangles on either side of the plane, and group them imto positive and negative sets.
+    // 2. Split triangles that intersect the plane, and add them into the two sets.
+    // 3. Add new surfaces overlapping with the plane to form solid meshes, using constrained Delaunay triangulation.
+    // 4. Remove redundant triangles (if any) introduced by step 3.
 
     let mut border: Vec<Vec3A> = Vec::new();
     let mut border_edges: Vec<[usize; 2]> = Vec::new();

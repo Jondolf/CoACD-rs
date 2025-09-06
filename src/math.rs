@@ -36,6 +36,19 @@ impl Plane {
         }
     }
 
+    /// Creates a new plane from a point on the plane and a normal vector.
+    #[inline]
+    pub fn from_point_and_normal(point: Vec3A, normal: Vec3A) -> Self {
+        let d = -normal.dot(point);
+        Self::new(normal, d)
+    }
+
+    /// Returns the normal vector of the plane.
+    #[inline]
+    pub fn normal(&self) -> Vec3A {
+        Vec3A::new(self.a, self.b, self.c)
+    }
+
     /// Determines which side of the plane a triangle's normal points to.
     ///
     /// If any component of the normal is positive, the triangle is considered to be
