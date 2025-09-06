@@ -129,13 +129,16 @@ fn triangulation(
         max = max.max(local_p);
     }
 
-    let triangulation = ConstrainedDelaunayTriangulation::<Point2<f32>>::bulk_load_cdt(
+    // TODO: What to do with conflicting edges?
+    let mut conflicting_edges = Vec::new();
+    let triangulation = ConstrainedDelaunayTriangulation::<Point2<f32>>::try_bulk_load_cdt(
         points,
         border_edges
             .iter()
             // TODO: This is silly
             .map(|&[v0, v1]| [v0 - 1, v1 - 1])
             .collect(),
+        |e| conflicting_edges.push(e),
     )
     .map_err(|_| TriangulationError::InvalidCoordinate)?;
 
