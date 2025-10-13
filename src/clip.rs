@@ -431,7 +431,7 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
     assert!(mesh.vertices.len() <= i32::MAX as usize);
 
     // Four steps:
-    // 1. Find triangles on either side of the plane, and group them imto positive and negative sets.
+    // 1. Find triangles on either side of the plane, and group them into positive and negative sets.
     // 2. Split triangles that intersect the plane, and add them into the two sets.
     // 3. Add new surfaces overlapping with the plane to form solid meshes, using constrained Delaunay triangulation.
     // 4. Remove redundant triangles (if any) introduced by step 3.
