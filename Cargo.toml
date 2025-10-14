@@ -4,9 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-glam = { version = "0.29", features = ["approx"] }
+glam = { version = "0.30", features = ["approx"] }
 spade = "2.15"
-obvhs = "0.2"
+# For glam 0.30
+obvhs = { git = "https://github.com/diquah/obvhs" }
 hashbrown = "0.16"
 foldhash = "0.2"
 rand = "0.9"
@@ -14,4 +15,4 @@ kiddo = "5.2"
 
 [dev-dependencies]
 # For test scenes and rendering
-bevy = { version = "0.16" }
+bevy = { version = "0.17" }
