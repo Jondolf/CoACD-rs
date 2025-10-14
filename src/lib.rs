@@ -1,5 +1,4 @@
-//! Approximate Convex Decomposition for 3D Meshes
-//! with Collision-Aware Concavity and Tree Search.
+//! Approximate Convex Decomposition for 3D Meshes with Collision-Aware Concavity and Tree Search.
 //!
 //! # References
 //!

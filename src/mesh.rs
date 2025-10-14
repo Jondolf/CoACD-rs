@@ -73,7 +73,6 @@ impl IndexedMesh {
     /// A separating plane is a plane that divides the space into two half-spaces,
     /// such that all vertices of this mesh are on one side of the plane,
     /// and all vertices of the other mesh are on the opposite side.
-    #[inline]
     pub fn find_convex_separating_face_plane(&self, other: &IndexedMesh) -> Option<Plane> {
         let mut plane_found = false;
 
