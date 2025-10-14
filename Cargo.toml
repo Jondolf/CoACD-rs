@@ -10,6 +10,7 @@ obvhs = "0.2"
 hashbrown = "0.16"
 foldhash = "0.2"
 rand = "0.9"
+kiddo = "5.2"
 
 [dev-dependencies]
 # For test scenes and rendering

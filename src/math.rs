@@ -131,3 +131,162 @@ pub fn triangle_area(p0: Vec3A, p1: Vec3A, p2: Vec3A) -> f32 {
 pub fn tetrahedron_signed_volume(p0: Vec3A, p1: Vec3A, p2: Vec3A) -> f32 {
     (p0.dot(p1.cross(p2))) / 6.0
 }
+
+/// A line segment defined by two points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineSegment {
+    pub a: Vec3A,
+    pub b: Vec3A,
+}
+
+impl LineSegment {
+    // Computes the squared Euclidean distance from a point to the line segment.
+    #[inline]
+    pub fn point_distance_squared(&self, point: Vec3A) -> f32 {
+        let ab = self.b - self.a;
+        let ap = point - self.a;
+        let ab_length_squared = ab.length_squared();
+
+        if ab_length_squared == 0.0 {
+            // The segment is a point.
+            return ap.length();
+        }
+
+        // Project point onto the line defined by the segment, then clamp to the segment.
+        // TODO: CoACD just invalidates points outside the segment. Is that necessary for the algorithm?
+        let t = ap.dot(ab) / ab_length_squared;
+        let t_clamped = t.clamp(0.0, 1.0);
+        let closest_point = self.a + t_clamped * ab;
+
+        (point - closest_point).length_squared()
+    }
+}
+
+/// Finds the point closest to the given `point` on a triangle ABC.
+///
+/// The Voronoi regions are A, B, C, AB, BC, AC, and ABC.
+// TODO: Compare to CoACD's version.
+#[inline]
+pub fn project_on_triangle_3d(a: Vec3A, b: Vec3A, c: Vec3A, point: Vec3A) -> Vec3A {
+    // Define A, B, and C as the vertices of the triangLe ABC, Q as the input point,
+    // and P as the projection of Q onto a line travelling through AB, BC, or AC,
+    // or onto the triangle interior ABC.
+    //
+    // We have 3 vertex regions (A, B, C), 3 edge regions (AB, BC, AC), and 1 interior region (ABC).
+    //
+    //          |             |
+    //          |  Region AB  |
+    // Region B |             |  Region A
+    //          B ----------- A
+    //        /  \           /   \
+    //      /     \ Region  /      \
+    //   /         \  ABC  /         \
+    //    Region BC \     / Region AC
+    //               \   /
+    //                 C
+    //               /   \
+    //            /         \
+    //         /    Region C   \
+    //
+    // We'll find the Voronoi region of Q and compute P in one to three steps:
+    //
+    // 1. Check vertex regions using the barycentric coordinates of each segment.
+    //    - If Q is in a vertex region, return P = Q.
+    // 2. Check edge regions using the barycentric coordinates of both the segments and the triangle itself.
+    //    - If Q is in an edge region, project Q onto the segment, and return P.
+    // 3. Q must be in the interior region ABC.
+    //    - In 2D, return P = Q.
+    //    - In 3D, project Q onto the triangle face, and return P.
+    //
+    // First, we'll check each vertex region by determining the barycentric coordinates
+    // of Q with respect to each line segment (see `project_on_segment`).
+    //
+    // - A: u_AC <= 0 and v_AB <= 0
+    // - B: u_AB <= 0 and v_BC <= 0
+    // - C: u_BC <= 0 and v_AC <= 0
+    //
+    // We don't need the actual uv values yet. Instead, we can compare dot products.
+
+    let q = point;
+    let ab = b - a;
+    let ac = c - a;
+    let aq = q - a;
+
+    let ab_aq = ab.dot(aq);
+    let ac_aq = ac.dot(aq);
+
+    // u_AC <= 0 and  v_AB <= 0 (Voronoi region A)
+    if ac_aq <= 0.0 && ab_aq <= 0.0 {
+        return a;
+    }
+
+    let bq = q - b;
+    let ab_bq = ab.dot(bq);
+    let ac_bq = ac.dot(bq);
+
+    // u_AB <= 0 and v_BC <= 0 (Voronoi region B)
+    if ab_bq >= 0.0 && ac_bq <= ab_bq {
+        return b;
+    }
+
+    let cq = q - c;
+    let ab_cq = ab.dot(cq);
+    let ac_cq = ac.dot(cq);
+
+    // u_BC <= 0 and v_AC <= 0 (Voronoi region C)
+    if ac_cq >= 0.0 && ab_cq <= ac_cq {
+        return c;
+    }
+
+    // Next, we will check the edge regions AB, BC, and AC.
+    //
+    // We can use the barycentric coordinates (u, v, w) of Q to represent any point
+    // in the triangle plane. For line segments, (u, v) represents fractional lengths,
+    // but for triangles, (u, v, w) represents the signed fractional areas of three triangles inscribed in ABC.
+    //
+    // u_ABC = area(QBC) / area(ABC)
+    // v_ABC = area(QAC) / area(ABC)
+    // w_ABC = area(QAB) / area(ABC)
+    //
+    // We will use the signs of the barymetric coordinates to locate the correct Voronoi region.
+
+    let bc = c - b;
+
+    let normal = ab.cross(ac);
+
+    // w_ABC * area < 0 and v_AB >= 0 and u_AB >= 0 (Voronoi region AB)
+    let vc = normal.dot(ab.cross(aq));
+    if vc <= 0.0 && ab_aq >= 0.0 && ab_bq <= 0.0 {
+        let v = ab_aq / ab.length_squared();
+        let p = a + ab * v;
+        return p;
+    }
+
+    // v_ABC * area < 0 and u_AC >= 0 and v_AC >= 0 (Voronoi region AC)
+    let vb = -normal.dot(ac.cross(cq));
+    if vb <= 0.0 && ac_aq >= 0.0 && ac_cq <= 0.0 {
+        let w = ac_aq / ac.length_squared();
+        let p = a + ac * w;
+        return p;
+    }
+
+    // u_ABC * area < 0 and v_BC >= 0 and u_BC >= 0 (Voronoi region BC)
+    let va = normal.dot(bc.cross(bq));
+    if va <= 0.0 && ac_bq - ab_bq >= 0.0 && ab_cq - ac_cq >= 0.0 {
+        let w = bc.dot(bq) / bc.length_squared();
+        let p = b + bc * w;
+        return p;
+    }
+
+    // The projection is not in a vertex region or an edge region.
+    // u, v, and w are all positive, and P is in the interior of the triangle ABC.
+
+    if va + vb + vc != 0.0 {
+        let denom = 1.0 / (va + vb + vc);
+        let v = vb * denom;
+        let w = vc * denom;
+        a + ab * v + ac * w
+    } else {
+        q
+    }
+}
