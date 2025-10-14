@@ -1852,14 +1852,17 @@ checksum = "1b1dc960ba75d543267db9254da8ec1cb318a037beb3f8d2497520e410096fab"
 name = "coacd"
 version = "0.1.0"
 dependencies = [
+ "approx",
  "bevy",
  "foldhash 0.2.0",
  "glam",
+ "glam_matrix_extras",
  "hashbrown 0.16.0",
  "kiddo",
  "obvhs",
  "rand",
  "spade",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -2647,6 +2650,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam_matrix_extras"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a321595865557fc1ec990c8eb289b25f0cb1d058997cc0034a17f507704f3183"
+dependencies = [
+ "glam",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2931,7 +2943,7 @@ checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

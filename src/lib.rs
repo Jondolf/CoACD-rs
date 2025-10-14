@@ -11,6 +11,7 @@ pub mod clip;
 pub mod cost;
 pub mod hausdorff;
 pub mod mesh;
+pub mod pca;
 
 pub(crate) mod collections;
 pub(crate) mod math;
