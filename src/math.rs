@@ -168,7 +168,7 @@ impl LineSegment {
 // TODO: Compare to CoACD's version.
 #[inline]
 pub fn project_on_triangle_3d(a: Vec3A, b: Vec3A, c: Vec3A, point: Vec3A) -> Vec3A {
-    // Define A, B, and C as the vertices of the triangLe ABC, Q as the input point,
+    // Define A, B, and C as the vertices of the triangle ABC, Q as the input point,
     // and P as the projection of Q onto a line travelling through AB, BC, or AC,
     // or onto the triangle interior ABC.
     //
