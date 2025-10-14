@@ -40,8 +40,8 @@ pub fn face_hausdorff_distance(
     for point in samples2 {
         // Find the nearest neighbors in `mesh1`.
         let results = tree1.nearest_n::<SquaredEuclidean>(point, NUM_NEIGHBORS);
+        let first_distance_squared = results[0].distance;
 
-        let first_distance = results[0].distance;
         let p = Vec3A::from_array(*point);
 
         // The squared distance to the closest point on the triangles.
@@ -74,7 +74,7 @@ pub fn face_hausdorff_distance(
         if min_dist_sq > FAR_AWAY_NEAREST_NEIGHBOR {
             // If the minimum distance is much larger than the distance to the nearest neighbor,
             // we can use the distance to the nearest neighbor as a lower bound.
-            min_dist_sq = first_distance * first_distance;
+            min_dist_sq = first_distance_squared;
         }
 
         if min_dist_sq > max_dist_sq && min_dist_sq != f32::INFINITY {
@@ -86,8 +86,8 @@ pub fn face_hausdorff_distance(
     for point in samples1 {
         // Find the nearest neighbors in `mesh2`.
         let results = tree2.nearest_n::<SquaredEuclidean>(point, NUM_NEIGHBORS);
+        let first_distance_squared = results[0].distance;
 
-        let first_distance = results[0].distance;
         let p = Vec3A::from_array(*point);
 
         // The squared distance to the closest point on the triangles.
@@ -118,7 +118,7 @@ pub fn face_hausdorff_distance(
         if min_dist_sq > FAR_AWAY_NEAREST_NEIGHBOR {
             // If the minimum distance is much larger than the distance to the nearest neighbor,
             // we can use the distance to the nearest neighbor as a lower bound.
-            min_dist_sq = first_distance * first_distance;
+            min_dist_sq = first_distance_squared;
         }
 
         if min_dist_sq > max_dist_sq && min_dist_sq != f32::INFINITY {
