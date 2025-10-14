@@ -1,3 +1,5 @@
+//! Indexed 3D triangle mesh.
+
 use glam::Vec3A;
 use rand::{Rng, SeedableRng, distr::Uniform, rngs::StdRng};
 

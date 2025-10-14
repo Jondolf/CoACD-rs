@@ -1,3 +1,5 @@
+//! Mesh clipping with a plane.
+
 use std::collections::VecDeque;
 
 use glam::{Affine3A, Mat3A, Vec2, Vec3A, Vec3Swizzles};
@@ -152,7 +154,7 @@ fn triangulation(
     for vertex in triangulation.vertices().skip(border.len()) {
         let p = vertex.position();
         let local_p = Vec3A::new(p.x, p.y, 0.0);
-        let world_p = affine.inverse().transform_point3a(local_p);
+        let _world_p = affine.inverse().transform_point3a(local_p);
         todo!("Not implemented");
     }
 
@@ -172,7 +174,7 @@ fn remove_outlier_triangles(
     border: &[Vec3A],
     overlap: &[Vec3A],
     border_edges: &[[usize; 2]],
-    border_triangles: &mut Vec<[usize; 3]>,
+    border_triangles: &mut [[usize; 3]],
     vertex_map: &mut HashMap<usize, usize>,
 ) -> RemoveOutliersResult {
     let mut new_border = Vec::with_capacity(border.len());
@@ -269,7 +271,7 @@ fn remove_outlier_triangles(
                 remove_map[idx as usize] = true;
                 new_border_triangles.push(border_triangles[idx as usize]);
                 for k in 0..3 {
-                    add_vertex[border_triangles[idx as usize][k] - 1 as usize] = true;
+                    add_vertex[border_triangles[idx as usize][k] - 1] = true;
                 }
                 let [p0, p1, p2] = border_triangles[idx as usize];
                 if p2 != v0 && p2 != v1 {
@@ -316,7 +318,7 @@ fn remove_outlier_triangles(
                 remove_map[idx as usize] = true;
                 new_border_triangles.push(border_triangles[idx as usize]);
                 for k in 0..3 {
-                    add_vertex[border_triangles[idx as usize][k] - 1 as usize] = true;
+                    add_vertex[border_triangles[idx as usize][k] - 1] = true;
                 }
                 let [p0, p1, p2] = border_triangles[idx as usize];
                 if p2 != v0 && p2 != v1 {
@@ -367,7 +369,7 @@ fn remove_outlier_triangles(
                     remove_map[idx as usize] = true;
                     new_border_triangles.push(border_triangles[idx as usize]);
                     for k in 0..3 {
-                        add_vertex[border_triangles[idx as usize][k] - 1 as usize] = true;
+                        add_vertex[border_triangles[idx as usize][k] - 1] = true;
                     }
                     let [p0, p1, p2] = border_triangles[idx as usize];
                     if p2 != v0 && p2 != v1 {
@@ -583,68 +585,34 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                 add_edge_point(&mut edge_map, &mut border, pi1, id1, id2, &mut idx);
 
                 // Record the edges.
-                let id_pi0 = *edge_map.get(&[id0, id1]).unwrap() as isize;
-                let id_pi1 = *edge_map.get(&[id1, id2]).unwrap() as isize;
+                let id_pi0 = *edge_map.get(&[id0, id1]).unwrap();
+                let id_pi1 = *edge_map.get(&[id1, id2]).unwrap();
                 if side1 == PlaneSide::Front {
                     if id_pi1 != id_pi0 {
                         border_edges.push([id_pi1 as usize + 1, id_pi0 as usize + 1]);
                         positive_map[id1] = true;
                         negative_map[id0] = true;
                         negative_map[id2] = true;
-                        positive_indices.push([
-                            id1 as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                        ]);
-                        negative_indices.push([
-                            id0 as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                        ]);
-                        negative_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id2 as isize,
-                            id0 as isize,
-                        ]);
+                        positive_indices.push([id1 as isize, -id_pi1 - 1, -id_pi0 - 1]);
+                        negative_indices.push([id0 as isize, -id_pi0 - 1, -id_pi1 - 1]);
+                        negative_indices.push([-id_pi1 - 1, id2 as isize, id0 as isize]);
                     } else {
                         negative_map[id0] = true;
                         negative_map[id2] = true;
-                        negative_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id2 as isize,
-                            id0 as isize,
-                        ]);
+                        negative_indices.push([-id_pi1 - 1, id2 as isize, id0 as isize]);
                     }
+                } else if id_pi0 != id_pi1 {
+                    border_edges.push([id_pi0 as usize + 1, id_pi1 as usize + 1]);
+                    negative_map[id1] = true;
+                    positive_map[id0] = true;
+                    positive_map[id2] = true;
+                    negative_indices.push([id1 as isize, -id_pi1 - 1, -id_pi0 - 1]);
+                    positive_indices.push([id0 as isize, -id_pi0 - 1, -id_pi1 - 1]);
+                    positive_indices.push([-id_pi1 - 1, id2 as isize, id0 as isize]);
                 } else {
-                    if id_pi0 != id_pi1 {
-                        border_edges.push([id_pi0 as usize + 1, id_pi1 as usize + 1]);
-                        negative_map[id1] = true;
-                        positive_map[id0] = true;
-                        positive_map[id2] = true;
-                        negative_indices.push([
-                            id1 as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                        ]);
-                        positive_indices.push([
-                            id0 as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                        ]);
-                        positive_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id2 as isize,
-                            id0 as isize,
-                        ]);
-                    } else {
-                        positive_map[id0] = true;
-                        positive_map[id2] = true;
-                        positive_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id2 as isize,
-                            id0 as isize,
-                        ]);
-                    }
+                    positive_map[id0] = true;
+                    positive_map[id2] = true;
+                    positive_indices.push([-id_pi1 - 1, id2 as isize, id0 as isize]);
                 }
             } else if let Some(pi1) = pi1
                 && let Some(pi2) = pi2
@@ -655,68 +623,34 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                 add_edge_point(&mut edge_map, &mut border, pi2, id2, id0, &mut idx);
 
                 // Record the edges.
-                let id_pi1 = *edge_map.get(&[id1, id2]).unwrap() as isize;
-                let id_pi2 = *edge_map.get(&[id2, id0]).unwrap() as isize;
+                let id_pi1 = *edge_map.get(&[id1, id2]).unwrap();
+                let id_pi2 = *edge_map.get(&[id2, id0]).unwrap();
                 if side2 == PlaneSide::Front {
                     if id_pi2 != id_pi1 {
                         border_edges.push([id_pi2 as usize + 1, id_pi1 as usize + 1]);
                         positive_map[id2] = true;
                         negative_map[id0] = true;
                         negative_map[id1] = true;
-                        positive_indices.push([
-                            id2 as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                        ]);
-                        negative_indices.push([
-                            id0 as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                        ]);
-                        negative_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id0 as isize,
-                            id1 as isize,
-                        ]);
+                        positive_indices.push([id2 as isize, -id_pi2 - 1, -id_pi1 - 1]);
+                        negative_indices.push([id0 as isize, -id_pi1 - 1, -id_pi2 - 1]);
+                        negative_indices.push([-id_pi1 - 1, id0 as isize, id1 as isize]);
                     } else {
                         negative_map[id0] = true;
                         negative_map[id1] = true;
-                        negative_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id0 as isize,
-                            id1 as isize,
-                        ]);
+                        negative_indices.push([-id_pi1 - 1, id0 as isize, id1 as isize]);
                     }
+                } else if id_pi1 != id_pi2 {
+                    border_edges.push([id_pi1 as usize + 1, id_pi2 as usize + 1]);
+                    negative_map[id2] = true;
+                    positive_map[id0] = true;
+                    positive_map[id1] = true;
+                    negative_indices.push([id2 as isize, -id_pi2 - 1, -id_pi1 - 1]);
+                    positive_indices.push([id0 as isize, -id_pi1 - 1, -id_pi2 - 1]);
+                    positive_indices.push([-id_pi1 - 1, id0 as isize, id1 as isize]);
                 } else {
-                    if id_pi1 != id_pi2 {
-                        border_edges.push([id_pi1 as usize + 1, id_pi2 as usize + 1]);
-                        negative_map[id2] = true;
-                        positive_map[id0] = true;
-                        positive_map[id1] = true;
-                        negative_indices.push([
-                            id2 as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                        ]);
-                        positive_indices.push([
-                            id0 as isize,
-                            (-1 * id_pi1 - 1) as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                        ]);
-                        positive_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id0 as isize,
-                            id1 as isize,
-                        ]);
-                    } else {
-                        positive_map[id0] = true;
-                        positive_map[id1] = true;
-                        positive_indices.push([
-                            (-1 * id_pi1 - 1) as isize,
-                            id0 as isize,
-                            id1 as isize,
-                        ]);
-                    }
+                    positive_map[id0] = true;
+                    positive_map[id1] = true;
+                    positive_indices.push([-id_pi1 - 1, id0 as isize, id1 as isize]);
                 }
             } else if let Some(pi2) = pi2
                 && let Some(pi0) = pi0
@@ -727,68 +661,34 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                 add_edge_point(&mut edge_map, &mut border, pi0, id0, id1, &mut idx);
 
                 // Record the edges.
-                let id_pi0 = *edge_map.get(&[id0, id1]).unwrap() as isize;
-                let id_pi2 = *edge_map.get(&[id2, id0]).unwrap() as isize;
+                let id_pi0 = *edge_map.get(&[id0, id1]).unwrap();
+                let id_pi2 = *edge_map.get(&[id2, id0]).unwrap();
                 if side0 == PlaneSide::Front {
                     if id_pi0 != id_pi2 {
                         border_edges.push([id_pi0 as usize + 1, id_pi2 as usize + 1]);
                         positive_map[id0] = true;
                         negative_map[id1] = true;
                         negative_map[id2] = true;
-                        positive_indices.push([
-                            id0 as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                        ]);
-                        negative_indices.push([
-                            id1 as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                        ]);
-                        negative_indices.push([
-                            (-1 * id_pi2 - 1) as isize,
-                            id1 as isize,
-                            id2 as isize,
-                        ]);
+                        positive_indices.push([id0 as isize, -id_pi0 - 1, -id_pi2 - 1]);
+                        negative_indices.push([id1 as isize, -id_pi2 - 1, -id_pi0 - 1]);
+                        negative_indices.push([-id_pi2 - 1, id1 as isize, id2 as isize]);
                     } else {
                         negative_map[id1] = true;
                         negative_map[id2] = true;
-                        negative_indices.push([
-                            (-1 * id_pi2 - 1) as isize,
-                            id1 as isize,
-                            id2 as isize,
-                        ]);
+                        negative_indices.push([-id_pi2 - 1, id1 as isize, id2 as isize]);
                     }
+                } else if id_pi2 != id_pi0 {
+                    border_edges.push([id_pi2 as usize + 1, id_pi0 as usize + 1]);
+                    negative_map[id0] = true;
+                    positive_map[id1] = true;
+                    positive_map[id2] = true;
+                    negative_indices.push([id0 as isize, -id_pi0 - 1, -id_pi2 - 1]);
+                    positive_indices.push([id1 as isize, -id_pi2 - 1, -id_pi0 - 1]);
+                    positive_indices.push([-id_pi2 - 1, id1 as isize, id2 as isize]);
                 } else {
-                    if id_pi2 != id_pi0 {
-                        border_edges.push([id_pi2 as usize + 1, id_pi0 as usize + 1]);
-                        negative_map[id0] = true;
-                        positive_map[id1] = true;
-                        positive_map[id2] = true;
-                        negative_indices.push([
-                            id0 as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                        ]);
-                        positive_indices.push([
-                            id1 as isize,
-                            (-1 * id_pi2 - 1) as isize,
-                            (-1 * id_pi0 - 1) as isize,
-                        ]);
-                        positive_indices.push([
-                            (-1 * id_pi2 - 1) as isize,
-                            id1 as isize,
-                            id2 as isize,
-                        ]);
-                    } else {
-                        positive_map[id1] = true;
-                        positive_map[id2] = true;
-                        positive_indices.push([
-                            (-1 * id_pi2 - 1) as isize,
-                            id1 as isize,
-                            id2 as isize,
-                        ]);
-                    }
+                    positive_map[id1] = true;
+                    positive_map[id2] = true;
+                    positive_indices.push([-id_pi2 - 1, id1 as isize, id2 as isize]);
                 }
             } else if let Some(pi0) = pi0
                 && let Some(pi1) = pi1
@@ -807,39 +707,21 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                     edge_map.insert([id0, id2], id_pi0);
 
                     add_edge_point(&mut edge_map, &mut border, pi1, id1, id2, &mut idx);
-                    let id_pi1 = *edge_map.get(&[id1, id2]).unwrap() as isize;
+                    let id_pi1 = *edge_map.get(&[id1, id2]).unwrap();
                     if side1 == PlaneSide::Front {
                         if id_pi1 != id_pi0 {
                             border_edges.push([id_pi1 as usize + 1, id_pi0 as usize + 1]);
                             positive_map[id1] = true;
                             negative_map[id2] = true;
-                            positive_indices.push([
-                                id1 as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                            ]);
-                            negative_indices.push([
-                                id2 as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                            ]);
+                            positive_indices.push([id1 as isize, -id_pi1 - 1, -id_pi0 - 1]);
+                            negative_indices.push([id2 as isize, -id_pi0 - 1, -id_pi1 - 1]);
                         }
-                    } else {
-                        if id_pi0 != id_pi1 {
-                            border_edges.push([id_pi0 as usize + 1, id_pi1 as usize + 1]);
-                            negative_map[id1] = true;
-                            positive_map[id2] = true;
-                            negative_indices.push([
-                                id1 as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                            ]);
-                            positive_indices.push([
-                                id2 as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                            ]);
-                        }
+                    } else if id_pi0 != id_pi1 {
+                        border_edges.push([id_pi0 as usize + 1, id_pi1 as usize + 1]);
+                        negative_map[id1] = true;
+                        positive_map[id2] = true;
+                        negative_indices.push([id1 as isize, -id_pi1 - 1, -id_pi0 - 1]);
+                        positive_indices.push([id2 as isize, -id_pi0 - 1, -id_pi1 - 1]);
                     }
                 } else if side1 == PlaneSide::OnPlane
                     || (side0 != PlaneSide::OnPlane
@@ -854,39 +736,21 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                     edge_map.insert([id2, id1], id_pi1);
 
                     add_edge_point(&mut edge_map, &mut border, pi2, id2, id0, &mut idx);
-                    let id_pi2 = *edge_map.get(&[id2, id0]).unwrap() as isize;
+                    let id_pi2 = *edge_map.get(&[id2, id0]).unwrap();
                     if side0 == PlaneSide::Front {
                         if id_pi1 != id_pi2 {
                             border_edges.push([id_pi1 as usize + 1, id_pi2 as usize + 1]);
                             positive_map[id0] = true;
                             negative_map[id2] = true;
-                            positive_indices.push([
-                                id0 as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                            ]);
-                            negative_indices.push([
-                                id2 as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                            ]);
+                            positive_indices.push([id0 as isize, -id_pi1 - 1, -id_pi2 - 1]);
+                            negative_indices.push([id2 as isize, -id_pi2 - 1, -id_pi1 - 1]);
                         }
-                    } else {
-                        if id_pi2 != id_pi1 {
-                            border_edges.push([id_pi2 as usize + 1, id_pi1 as usize + 1]);
-                            positive_map[id0] = true;
-                            negative_map[id2] = true;
-                            negative_indices.push([
-                                id0 as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                            ]);
-                            positive_indices.push([
-                                id2 as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                                (-1 * id_pi1 - 1) as isize,
-                            ]);
-                        }
+                    } else if id_pi2 != id_pi1 {
+                        border_edges.push([id_pi2 as usize + 1, id_pi1 as usize + 1]);
+                        positive_map[id0] = true;
+                        negative_map[id2] = true;
+                        negative_indices.push([id0 as isize, -id_pi1 - 1, -id_pi2 - 1]);
+                        positive_indices.push([id2 as isize, -id_pi2 - 1, -id_pi1 - 1]);
                     }
                 } else if side2 == PlaneSide::OnPlane
                     || (side0 != PlaneSide::OnPlane
@@ -901,39 +765,21 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
                     edge_map.insert([id0, id2], id_pi2);
 
                     add_edge_point(&mut edge_map, &mut border, pi0, id0, id1, &mut idx);
-                    let id_pi0 = *edge_map.get(&[id0, id1]).unwrap() as isize;
+                    let id_pi0 = *edge_map.get(&[id0, id1]).unwrap();
                     if side0 == PlaneSide::Front {
                         if id_pi0 != id_pi2 {
                             border_edges.push([id_pi0 as usize + 1, id_pi2 as usize + 1]);
                             positive_map[id0] = true;
                             negative_map[id1] = true;
-                            positive_indices.push([
-                                id0 as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                            ]);
-                            negative_indices.push([
-                                id1 as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                            ]);
+                            positive_indices.push([id0 as isize, -id_pi0 - 1, -id_pi2 - 1]);
+                            negative_indices.push([id1 as isize, -id_pi2 - 1, -id_pi0 - 1]);
                         }
-                    } else {
-                        if id_pi2 != id_pi0 {
-                            border_edges.push([id_pi2 as usize + 1, id_pi0 as usize + 1]);
-                            negative_map[id0] = true;
-                            positive_map[id1] = true;
-                            negative_indices.push([
-                                id0 as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                            ]);
-                            positive_indices.push([
-                                id1 as isize,
-                                (-1 * id_pi2 - 1) as isize,
-                                (-1 * id_pi0 - 1) as isize,
-                            ]);
-                        }
+                    } else if id_pi2 != id_pi0 {
+                        border_edges.push([id_pi2 as usize + 1, id_pi0 as usize + 1]);
+                        negative_map[id0] = true;
+                        positive_map[id1] = true;
+                        negative_indices.push([id0 as isize, -id_pi0 - 1, -id_pi2 - 1]);
+                        positive_indices.push([id1 as isize, -id_pi2 - 1, -id_pi0 - 1]);
                     }
                 } else {
                     unreachable!("All three intersection points should not be unique.");
@@ -1017,34 +863,34 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
         *id0 = if *id0 >= 0 {
             positive_projection[*id0 as usize] - 1
         } else {
-            -1 * *id0 + pos_n - 1
+            -*id0 + pos_n - 1
         };
         *id1 = if *id1 >= 0 {
             positive_projection[*id1 as usize] - 1
         } else {
-            -1 * *id1 + pos_n - 1
+            -*id1 + pos_n - 1
         };
         *id2 = if *id2 >= 0 {
             positive_projection[*id2 as usize] - 1
         } else {
-            -1 * *id2 + pos_n - 1
+            -*id2 + pos_n - 1
         };
     }
     for [id0, id1, id2] in negative_indices.iter_mut() {
         *id0 = if *id0 >= 0 {
             negative_projection[*id0 as usize] - 1
         } else {
-            -1 * *id0 + neg_n - 1
+            -*id0 + neg_n - 1
         };
         *id1 = if *id1 >= 0 {
             negative_projection[*id1 as usize] - 1
         } else {
-            -1 * *id1 + neg_n - 1
+            -*id1 + neg_n - 1
         };
         *id2 = if *id2 >= 0 {
             negative_projection[*id2 as usize] - 1
         } else {
-            -1 * *id2 + neg_n - 1
+            -*id2 + neg_n - 1
         };
     }
 
