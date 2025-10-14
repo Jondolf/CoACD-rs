@@ -4,9 +4,10 @@ use glam::{Affine3A, Mat3A, Vec2, Vec3A, Vec3Swizzles};
 use spade::{ConstrainedDelaunayTriangulation, Point2, Triangulation};
 
 use crate::{
-    Aabb, IndexedMesh,
+    Aabb,
     collections::{HashMap, HashSet},
     math::{Plane, PlaneSide, triangle_area},
+    mesh::IndexedMesh,
 };
 
 // TODO: Scaling factor to tune thresholds to different mesh sizes?

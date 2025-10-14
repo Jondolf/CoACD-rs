@@ -23,7 +23,7 @@ fn setup(
         height: 2.0,
     });
 
-    let indexed_mesh = coacd::IndexedMesh {
+    let indexed_mesh = coacd::mesh::IndexedMesh {
         vertices: mesh
             .attribute(Mesh::ATTRIBUTE_POSITION)
             .unwrap()
@@ -60,8 +60,7 @@ fn setup(
         .positive_mesh
         .indices
         .iter()
-        .map(|i| i.iter().map(|&idx| idx as u32))
-        .flatten()
+        .flat_map(|i| i.iter().map(|&idx| idx as u32))
         .collect();
     let mut positive_mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -82,8 +81,7 @@ fn setup(
         .negative_mesh
         .indices
         .iter()
-        .map(|i| i.iter().map(|&idx| idx as u32))
-        .flatten()
+        .flat_map(|i| i.iter().map(|&idx| idx as u32))
         .collect();
     let mut negative_mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
