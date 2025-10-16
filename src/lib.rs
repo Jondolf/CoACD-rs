@@ -9,7 +9,9 @@
 pub mod clip;
 pub mod cost;
 pub mod hausdorff;
+pub mod mcts;
 pub mod mesh;
+pub mod parameters;
 pub mod pca;
 
 pub(crate) mod collections;
