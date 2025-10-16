@@ -1,6 +1,8 @@
 //! Indexed 3D triangle mesh.
 
-use glam::Vec3A;
+use glam::{DVec3, Vec3A};
+use obvhs::aabb::Aabb;
+use quickhull::{ConvexHull3d, ConvexHull3dError};
 use rand::{Rng, SeedableRng, distr::Uniform, rngs::StdRng};
 
 use crate::{Plane, PlaneSide, math};
@@ -20,6 +22,36 @@ impl IndexedMesh {
     pub fn clear(&mut self) {
         self.vertices.clear();
         self.indices.clear();
+    }
+
+    /// Returns `true` if the mesh has no vertices or no indices.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.vertices.is_empty() || self.indices.is_empty()
+    }
+
+    /// Computes the axis-aligned bounding box (AABB) of the mesh.
+    #[inline]
+    pub fn compute_aabb(&self) -> Aabb {
+        Aabb::from_points(&self.vertices)
+    }
+
+    /// Computes the convex hull of the mesh.
+    #[inline]
+    pub fn compute_convex_hull(&self) -> Result<ConvexHull3d, ConvexHull3dError> {
+        // Convert the vertices to `DVec3` for higher precision during hull computation.
+        let points = self
+            .vertices
+            .iter()
+            .map(|v| DVec3::new(v.x as f64, v.y as f64, v.z as f64))
+            .collect::<Vec<_>>();
+
+        // Use the `quickhull` crate to compute the convex hull.
+        // TODO: Could we make the Quickhull algorithm generic over the vector type
+        //       so that we don't have to convert between `Vec3A` and `DVec3`?
+        //       Would the loss in precision be acceptable?
+        // TODO: This can sometimes fail. Could we have a slower, more robust fallback?
+        quickhull::ConvexHull3d::try_from_points(&points, None)
     }
 
     /// Merges this mesh with another mesh, returning a new mesh.
@@ -215,4 +247,26 @@ fn r2_sequence(n: u32, seed: u32) -> [f32; 2] {
         (seed as f32 + FRAC_1_PLASTIC * n as f32) % 1.0,
         (seed as f32 + FRAC_1_PLASTIC_SQUARED * n as f32) % 1.0,
     ]
+}
+
+/// An extension trait for convex hulls.
+pub trait ConvexHullExt {
+    /// Converts the convex hull to an [`IndexedMesh`].
+    fn to_mesh(&self) -> IndexedMesh;
+}
+
+impl ConvexHullExt for ConvexHull3d {
+    fn to_mesh(&self) -> IndexedMesh {
+        let indices = self
+            .triangles()
+            .map(|tri| tri.indices())
+            .collect::<Vec<_>>();
+        let vertices = self
+            .points_ref()
+            .iter()
+            .map(|v| Vec3A::new(v.x as f32, v.y as f32, v.z as f32))
+            .collect::<Vec<_>>();
+
+        IndexedMesh { vertices, indices }
+    }
 }

@@ -1860,6 +1860,7 @@ dependencies = [
  "hashbrown 0.16.0",
  "kiddo",
  "obvhs",
+ "quickhull",
  "rand",
  "spade",
  "thiserror 2.0.16",
@@ -4009,6 +4010,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "331e97a1af0bf59823e6eadffe373d7b27f485be8748f71471c662c1f269b7fb"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "quickhull"
+version = "0.1.0"
+source = "git+https://github.com/Jondolf/quickhull-rs#68cf1b60fbd69bc38e2fe5d6169dc2a0ac493068"
+dependencies = [
+ "foldhash 0.2.0",
+ "glam",
+ "hashbrown 0.16.0",
+ "robust",
 ]
 
 [[package]]

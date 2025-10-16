@@ -10,6 +10,7 @@ glam_matrix_extras = { version = "0.1", features = [
     "f32",
 ], default-features = false }
 approx = "0.5"
+quickhull = { git = "https://github.com/Jondolf/quickhull-rs" }
 spade = "2.15"
 # For glam 0.30
 obvhs = { git = "https://github.com/diquah/obvhs" }
