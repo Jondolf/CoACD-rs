@@ -71,7 +71,7 @@ impl MonteCarloTree {
     /// Performs [Monte Carlo Tree Search (MCTS)][MCTS] to find the optimal splitting plane.
     ///
     /// [MCTS]: https://en.wikipedia.org/wiki/Monte_Carlo_tree_search
-    pub fn search(&mut self, parameters: &CoacdParaneters) -> Plane {
+    pub fn search(&mut self, parameters: &CoacdParaneters) -> Option<Plane> {
         // Start the MCTS process from the root node.
         let root_index = NodeIndex(0);
         let mut best_path = Vec::new();
@@ -104,7 +104,7 @@ impl MonteCarloTree {
         }
 
         // Select the best child of the root node as the final result.
-        let best_child_index = self.best_child(root_index, false, initial_cost);
+        let best_child_index = self.best_child(root_index, false, initial_cost)?;
 
         // Get the best node and its associated plane.
         let best_node = &self.nodes[best_child_index.0 as usize];
@@ -120,7 +120,7 @@ impl MonteCarloTree {
             parameters,
         );
 
-        plane
+        Some(plane)
     }
 
     /// Expands the given node by adding a new child node with a random move.
@@ -158,8 +158,11 @@ impl MonteCarloTree {
             }
 
             // Find the best plane among the candidates.
-            let (best_plane, _) = find_best_rv_plane(&worst_part.current_mesh, &planes)
-                .expect("Failed to find best plane");
+            let Some(best_plane) =
+                find_best_rv_plane(&worst_part.current_mesh, &planes, parameters)
+            else {
+                break;
+            };
             current_path.push(best_plane);
 
             // Clip the worst part with the selected plane.
@@ -195,8 +198,8 @@ impl MonteCarloTree {
             current_state.current_costs.push(negative_cost);
 
             // Create new parts for the two new meshes.
-            let positive_part = Part::new(clip_result.positive_mesh);
-            let negative_part = Part::new(clip_result.negative_mesh);
+            let positive_part = Part::new(clip_result.positive_mesh, parameters);
+            let negative_part = Part::new(clip_result.negative_mesh, parameters);
             current_state.current_parts.push(positive_part);
             current_state.current_parts.push(negative_part);
 
@@ -235,15 +238,24 @@ impl MonteCarloTree {
             }
 
             // Otherwise, move to the best child node.
-            current_index = self.best_child(current_index, true, initial_cost);
+            if let Some(best_child) = self.best_child(current_index, true, initial_cost) {
+                current_index = best_child;
+            }
         }
     }
 
     /// Selects the best child node based on the Upper Confidence Bound (UCB) formula.
-    fn best_child(&self, node_index: NodeIndex, explore: bool, initial_cost: f32) -> NodeIndex {
+    ///
+    /// If the node has no children, `None` is returned.
+    fn best_child(
+        &self,
+        node_index: NodeIndex,
+        explore: bool,
+        initial_cost: f32,
+    ) -> Option<NodeIndex> {
         let node = &self.nodes[node_index.0 as usize];
         let mut best_index = None;
-        let mut best_value = f32::MIN;
+        let mut best_value = f32::MAX;
 
         for &child_index in &node.children {
             let child = &self.nodes[child_index.0 as usize];
@@ -264,13 +276,13 @@ impl MonteCarloTree {
             // We negate the exploration term because lower cost is better in this context.
             let ucb_value = exploitation - exploration;
 
-            if ucb_value > best_value {
+            if ucb_value < best_value {
                 best_value = ucb_value;
                 best_index = Some(child_index);
             }
         }
 
-        best_index.expect("Node has no children")
+        best_index
     }
 
     /// Backpropagates the reward up the tree, updating visit counts and quality values.
@@ -296,7 +308,9 @@ impl MonteCarloTree {
                 *best_path = temp_path.clone();
             }
 
-            temp_path.push(node.state.current_value.unwrap().0);
+            if let Some((plane, _)) = node.state.current_value {
+                temp_path.push(plane);
+            }
 
             node.visit_times += 1;
             node.quality_value = node.quality_value.min(reward);
@@ -344,7 +358,6 @@ impl Node {
 
 /// The state of a [`Node`] in the [`MonteCarloTree`].
 pub struct NodeState {
-    pub terminal_threshold: f32,
     pub current_value: Option<(Plane, u32)>,
     /// Current accumulated score.
     // TODO: Do we need to store all of these? Some might just be computed on-the-fly.
@@ -366,8 +379,7 @@ impl NodeState {
         Self::from_parts(
             initial_part.clone(),
             vec![f32::MAX],
-            vec![Part::new(initial_part)],
-            parameters,
+            vec![Part::new(initial_part, parameters)],
         )
     }
 
@@ -375,26 +387,15 @@ impl NodeState {
         initial_part: IndexedMesh,
         current_costs: Vec<f32>,
         current_parts: Vec<Part>,
-        parameters: &CoacdParaneters,
     ) -> Self {
         let ori_mesh_area = initial_part.surface_area();
         let ori_mesh_volume = initial_part.signed_volume();
-        let ori_hull_volume = initial_part.compute_convex_hull().map_or_else(
-            |_| {
-                // Fallback: Use AABB volume if hull computation fails.
-                // TODO: Test if this is ever triggered, and if this is a reasonable fallback.
-                eprintln!(
-                    "Warning: Convex hull computation failed. Using AABB volume as fallback."
-                );
-                let aabb = initial_part.compute_aabb();
-                let diagonal = aabb.diagonal();
-                diagonal.element_product()
-            },
-            |hull| hull.volume() as f32,
-        );
+        let ori_hull_volume = initial_part
+            .compute_convex_hull()
+            .expect("Failed to compute convex hull")
+            .volume() as f32;
 
         Self {
-            terminal_threshold: parameters.threshold,
             current_value: None,
             current_cost: 0.0,
             current_score: f32::MAX,
@@ -436,8 +437,12 @@ impl NodeState {
     }
 
     /// Performs a move by taking the next available plane from the worst part.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are no more candidate planes available in the worst part.
     #[inline]
-    pub fn perform_next_move(&mut self) -> Option<Plane> {
+    pub fn perform_next_move(&mut self) -> Plane {
         self.current_parts[self.worst_part_index].take_next_move()
     }
 
@@ -445,8 +450,7 @@ impl NodeState {
         &mut self,
         parameters: &CoacdParaneters,
     ) -> Option<NodeState> {
-        // TODO: This should never fail, right?
-        let plane = self.perform_next_move()?;
+        let plane = self.perform_next_move();
 
         let worst_part = &self.current_parts[self.worst_part_index];
 
@@ -477,24 +481,22 @@ impl NodeState {
             }
 
             // Compute costs for the two new parts created by the split.
-            let positive_cost = cost::compute_rv(&clip_result.positive_mesh, &positive_hull);
-            let negative_cost = cost::compute_rv(&clip_result.negative_mesh, &negative_hull);
+            let positive_cost =
+                parameters.rv_k * cost::compute_rv(&clip_result.positive_mesh, &positive_hull);
+            let negative_cost =
+                parameters.rv_k * cost::compute_rv(&clip_result.negative_mesh, &negative_hull);
             current_costs.push(positive_cost);
             current_costs.push(negative_cost);
 
             // Create new parts for the two new meshes.
-            let positive_part = Part::new(clip_result.positive_mesh);
-            let negative_part = Part::new(clip_result.negative_mesh);
+            let positive_part = Part::new(clip_result.positive_mesh, parameters);
+            let negative_part = Part::new(clip_result.negative_mesh, parameters);
             current_parts.push(positive_part);
             current_parts.push(negative_part);
 
             // Create the next state.
-            let mut next_state = NodeState::from_parts(
-                self.initial_part.clone(),
-                current_costs,
-                current_parts,
-                parameters,
-            );
+            let mut next_state =
+                NodeState::from_parts(self.initial_part.clone(), current_costs, current_parts);
             next_state.current_value = Some((plane, self.worst_part_index as u32));
             next_state.update_score();
             next_state.current_cost = self.current_cost + next_state.current_score;
@@ -507,7 +509,6 @@ impl NodeState {
                 self.initial_part.clone(),
                 self.current_costs.clone(),
                 self.current_parts.clone(),
-                parameters,
             );
             next_state.current_cost = f32::MAX;
             next_state.current_round = parameters.mcts_max_depth;
@@ -528,28 +529,33 @@ pub struct Part {
 
 impl Part {
     #[inline]
-    pub fn new(current_mesh: IndexedMesh) -> Self {
+    pub fn new(current_mesh: IndexedMesh, parameters: &CoacdParaneters) -> Self {
         // TODO: Should this be computed elsewhere?
         let current_aabb = current_mesh.compute_aabb();
+
+        // Compute candidate planes.
+        let mut candidate_planes = Vec::new();
+        compute_axis_aligned_planes(current_aabb, parameters.mcts_nodes, &mut candidate_planes);
+
         Self {
             current_mesh,
             current_aabb,
             next_candidate: 0,
-            candidate_planes: Vec::new(),
+            candidate_planes,
         }
     }
 
     // TODO: This seems like it could be replaced with an iterator?
-    /// Returns the next available move ([`Plane`]) if any, and increments the internal counter.
+    /// Returns the next available move ([`Plane`]), and increments the internal counter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are no more candidate planes available.
     #[inline]
-    pub fn take_next_move(&mut self) -> Option<Plane> {
-        if self.next_candidate < self.candidate_planes.len() {
-            let plane = self.candidate_planes[self.next_candidate];
-            self.next_candidate += 1;
-            Some(plane)
-        } else {
-            None
-        }
+    pub fn take_next_move(&mut self) -> Plane {
+        let plane = self.candidate_planes[self.next_candidate];
+        self.next_candidate += 1;
+        plane
     }
 }
 
@@ -564,13 +570,10 @@ fn clip_by_path(
     parameters: &CoacdParaneters,
 ) -> Option<f32> {
     // TODO: Store the scores and parts together
-    // TODO: We want to always get the worst part (highest cost).
-    //       So maybe we should use a max-heap or priority queue instead?
-    //       This would make removal O(log n) and finding the worst part O(1).
     let mut scores = Vec::with_capacity(best_path.len() + 1);
     let mut parts = Vec::with_capacity(best_path.len() + 1);
 
-    let mut max_cost = 0.0;
+    let mut max_cost: f32;
 
     // Clip the initial mesh with the first plane.
     // TODO: Can't we just have this in the loop below?
@@ -599,7 +602,7 @@ fn clip_by_path(
     parts.push(clip_result.positive_mesh);
     parts.push(clip_result.negative_mesh);
 
-    let (mut final_cost, mut worst_index) = if positive_cost > max_cost {
+    let (mut final_cost, mut worst_index) = if positive_cost > negative_cost {
         (positive_cost, 0)
     } else {
         (negative_cost, 1)
@@ -676,12 +679,10 @@ fn ternary_mcts(
     let min_interval = 0.01;
     let threshold = 10;
 
-    let best_plane_normal_d = best_plane.normal_d();
-
     // x-axis
-    if (best_plane_normal_d.x - 1.0) < 1e-4 {
-        let mut left = (aabb.min.x + min_interval).max(-best_plane_normal_d.w - interval.x);
-        let mut right = (aabb.max.x - min_interval).min(-best_plane_normal_d.w + interval.x);
+    if (best_plane.normal().x - 1.0).abs() < 1e-4 {
+        let mut left = (aabb.min.x + min_interval).max(-best_plane.d() - interval.x);
+        let mut right = (aabb.max.x - min_interval).min(-best_plane.d() + interval.x);
 
         if left >= right {
             return false;
@@ -727,9 +728,9 @@ fn ternary_mcts(
     }
 
     // y-axis
-    if (best_plane_normal_d.y - 1.0) < 1e-4 {
-        let mut left = (aabb.min.y + min_interval).max(-best_plane_normal_d.w - interval.y);
-        let mut right = (aabb.max.y - min_interval).min(-best_plane_normal_d.w + interval.y);
+    if (best_plane.normal().y - 1.0).abs() < 1e-4 {
+        let mut left = (aabb.min.y + min_interval).max(-best_plane.d() - interval.y);
+        let mut right = (aabb.max.y - min_interval).min(-best_plane.d() + interval.y);
 
         if left >= right {
             return false;
@@ -775,9 +776,9 @@ fn ternary_mcts(
     }
 
     // z-axis
-    if (best_plane_normal_d.z - 1.0) < 1e-4 {
-        let mut left = (aabb.min.z + min_interval).max(-best_plane_normal_d.w - interval.z);
-        let mut right = (aabb.max.z - min_interval).min(-best_plane_normal_d.w + interval.z);
+    if (best_plane.normal().z - 1.0).abs() < 1e-4 {
+        let mut left = (aabb.min.z + min_interval).max(-best_plane.d() - interval.z);
+        let mut right = (aabb.max.z - min_interval).min(-best_plane.d() + interval.z);
 
         if left >= right {
             return false;
@@ -834,25 +835,26 @@ fn ternary_mcts(
 fn compute_axis_aligned_planes(aabb: Aabb, num_nodes: u32, planes: &mut Vec<Plane>) {
     let extents = aabb.diagonal();
     let interval = (extents / (num_nodes as f32 + 1.0)).max(Vec3A::splat(0.01));
+    let eps = 1e-6;
     let range_offset = interval.max(Vec3A::splat(0.015));
 
     // x-axis planes
     let mut i = aabb.min.x + range_offset.x;
-    while i <= aabb.max.x - range_offset.x {
+    while i <= aabb.max.x - range_offset.x + eps {
         planes.push(Plane::from_coefficients(1.0, 0.0, 0.0, -i));
         i += interval.x;
     }
 
     // y-axis planes
     let mut j = aabb.min.y + range_offset.y;
-    while j <= aabb.max.y - range_offset.y {
+    while j <= aabb.max.y - range_offset.y + eps {
         planes.push(Plane::from_coefficients(0.0, 1.0, 0.0, -j));
         j += interval.y;
     }
 
     // z-axis planes
     let mut k = aabb.min.z + range_offset.z;
-    while k <= aabb.max.z - range_offset.z {
+    while k <= aabb.max.z - range_offset.z + eps {
         planes.push(Plane::from_coefficients(0.0, 0.0, 1.0, -k));
         k += interval.z;
     }
@@ -863,7 +865,11 @@ fn compute_axis_aligned_planes(aabb: Aabb, num_nodes: u32, planes: &mut Vec<Plan
 ///
 /// See [`cost`] for details on the `r_v` metric.
 // TODO: The mixing of `r_v` and `rv` is annoying
-fn find_best_rv_plane(mesh: &IndexedMesh, planes: &[Plane]) -> Option<(Plane, f32)> {
+fn find_best_rv_plane(
+    mesh: &IndexedMesh,
+    planes: &[Plane],
+    parameters: &CoacdParaneters,
+) -> Option<Plane> {
     if planes.is_empty() {
         return None;
     }
@@ -873,6 +879,7 @@ fn find_best_rv_plane(mesh: &IndexedMesh, planes: &[Plane]) -> Option<(Plane, f3
 
     for &plane in planes {
         let Some(clip_result) = crate::clip::clip(mesh, &plane) else {
+            best_rv = f32::MAX;
             continue;
         };
 
@@ -890,12 +897,14 @@ fn find_best_rv_plane(mesh: &IndexedMesh, planes: &[Plane]) -> Option<(Plane, f3
             let positive_hull = positive_hull.to_mesh();
             let negative_hull = negative_hull.to_mesh();
 
-            let rv = cost::compute_total_rv(
-                &clip_result.positive_mesh,
-                &positive_hull,
-                &clip_result.negative_mesh,
-                &negative_hull,
-            );
+            // TODO: Technically we don't need to multiply by `rv_k` here since we're just comparing costs.
+            let rv = parameters.rv_k
+                * cost::compute_total_rv(
+                    &clip_result.positive_mesh,
+                    &positive_hull,
+                    &clip_result.negative_mesh,
+                    &negative_hull,
+                );
 
             if rv < best_rv {
                 best_rv = rv;
@@ -904,5 +913,5 @@ fn find_best_rv_plane(mesh: &IndexedMesh, planes: &[Plane]) -> Option<(Plane, f3
         }
     }
 
-    best_plane.map(|plane| (plane, best_rv))
+    best_plane
 }

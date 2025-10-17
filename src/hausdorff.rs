@@ -77,7 +77,7 @@ pub fn face_hausdorff_distance(
             min_dist_sq = first_distance_squared;
         }
 
-        if min_dist_sq > max_dist_sq && min_dist_sq != f32::INFINITY {
+        if min_dist_sq >= max_dist_sq && min_dist_sq != f32::INFINITY {
             max_dist_sq = min_dist_sq;
         }
     }
@@ -121,10 +121,11 @@ pub fn face_hausdorff_distance(
             min_dist_sq = first_distance_squared;
         }
 
-        if min_dist_sq > max_dist_sq && min_dist_sq != f32::INFINITY {
+        if min_dist_sq >= max_dist_sq && min_dist_sq != f32::INFINITY {
             max_dist_sq = min_dist_sq;
         }
     }
 
+    // TODO: Can we return the squared distance instead?
     max_dist_sq.sqrt()
 }

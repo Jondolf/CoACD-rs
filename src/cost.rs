@@ -51,7 +51,8 @@ const FRAC_3_PI_4: f32 = 3.0 * std::f32::consts::FRAC_1_PI / 4.0;
 ///
 /// See the [module-level documentation](crate::cost) for more details.
 #[inline]
-pub fn compute_rv(mesh1: &IndexedMesh, mesh2: &IndexedMesh) -> f32 {
+// TODO: Rename to `compute_rv_k` and multiply by `k` here, to prevent accidentally omitting `k`
+pub(crate) fn compute_rv(mesh1: &IndexedMesh, mesh2: &IndexedMesh) -> f32 {
     let v1 = mesh1.signed_volume();
     let v2 = mesh2.signed_volume();
     (FRAC_3_PI_4 * (v1 - v2).abs()).cbrt()
@@ -67,7 +68,7 @@ pub fn compute_rv(mesh1: &IndexedMesh, mesh2: &IndexedMesh) -> f32 {
 ///
 /// See the [module-level documentation](crate::cost) for more details.
 #[inline]
-pub fn compute_rv_hulls(
+pub(crate) fn compute_rv_hulls(
     hull1: &IndexedMesh,
     hull2: &IndexedMesh,
     combined_hull: &IndexedMesh,
@@ -82,7 +83,12 @@ pub fn compute_rv_hulls(
 ///
 /// See the [module-level documentation](crate::cost) for more details.
 #[inline]
-pub fn compute_hb(mesh1: &IndexedMesh, mesh2: &IndexedMesh, seed: u64, resolution: u32) -> f32 {
+pub(crate) fn compute_hb(
+    mesh1: &IndexedMesh,
+    mesh2: &IndexedMesh,
+    seed: u64,
+    resolution: u32,
+) -> f32 {
     let mut samples1 = Vec::new();
     let mut indices1 = Vec::new();
     let mut samples2 = Vec::new();
@@ -119,7 +125,7 @@ pub fn compute_hb(mesh1: &IndexedMesh, mesh2: &IndexedMesh, seed: u64, resolutio
 ///
 /// See the [module-level documentation](crate::cost) for more details.
 #[inline]
-pub fn compute_hb_hulls(
+pub(crate) fn compute_hb_hulls(
     hull1: &IndexedMesh,
     hull2: &IndexedMesh,
     combined_hull: &IndexedMesh,
@@ -144,7 +150,7 @@ pub fn compute_hb_hulls(
         seed,
         resolution,
         1.0,
-        10000,
+        1000,
         None,
         &mut samples2,
         &mut indices2,
@@ -166,7 +172,7 @@ pub fn compute_hb_hulls(
 
 /// Calls [`compute_rv`] for two meshes and returns the maximum value.
 #[inline]
-pub fn compute_total_rv(
+pub(crate) fn compute_total_rv(
     mesh1: &IndexedMesh,
     volume_hull1: &IndexedMesh,
     mesh2: &IndexedMesh,
@@ -181,7 +187,7 @@ pub fn compute_total_rv(
 ///
 /// See the [module-level documentation](crate::cost) for more details.
 #[inline]
-pub fn compute_concavity(
+pub(crate) fn compute_concavity(
     mesh1: &IndexedMesh,
     mesh2: &IndexedMesh,
     seed: u64,
@@ -197,7 +203,7 @@ pub fn compute_concavity(
 ///
 /// See the [module-level documentation](crate::cost) for more details.
 #[inline]
-pub fn compute_concavity_hulls(
+pub(crate) fn compute_concavity_hulls(
     hull1: &IndexedMesh,
     hull2: &IndexedMesh,
     combined_hull: &IndexedMesh,
@@ -216,7 +222,7 @@ pub fn compute_concavity_hulls(
 ///
 /// See the [module-level documentation](crate::cost) for more details.
 #[inline]
-pub fn compute_energy(
+pub(crate) fn compute_energy(
     positive_mesh: &IndexedMesh,
     positive_hull: &IndexedMesh,
     negative_mesh: &IndexedMesh,
@@ -236,7 +242,7 @@ pub fn compute_energy(
 /// `resolution` specifies the (rough) total number of points to sample from both hulls.
 /// `samples` is populated with the sampled points, while `indices` is populated with the
 /// corresponding triangle indices from which the points were sampled.
-pub fn extract_point_set(
+pub(crate) fn extract_point_set(
     hull1: &IndexedMesh,
     hull2: &IndexedMesh,
     seed: u64,

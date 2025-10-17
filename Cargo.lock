@@ -1862,6 +1862,7 @@ dependencies = [
  "obvhs",
  "quickhull",
  "rand",
+ "rayon",
  "spade",
  "thiserror 2.0.16",
 ]

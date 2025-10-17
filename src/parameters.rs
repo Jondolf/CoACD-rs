@@ -9,6 +9,8 @@ pub struct CoacdParaneters {
     pub seed: u64,
     pub rv_k: f32,
     pub pca: bool,
+    pub merge_convex_hulls: bool,
+    pub max_convex_hulls: Option<u32>,
     pub mcts_iterations: u32,
     pub mcts_max_depth: u32,
 }
@@ -30,6 +32,8 @@ impl CoacdParaneters {
             seed: 42,
             rv_k: 0.3,
             pca: true,
+            merge_convex_hulls: true,
+            max_convex_hulls: None,
             mcts_iterations: 150,
             mcts_max_depth: 3,
         }

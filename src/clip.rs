@@ -158,8 +158,6 @@ fn triangulation(
         todo!("Not implemented");
     }
 
-    debug_assert_eq!(border.len(), triangulation.num_vertices());
-
     Ok(border_triangles)
 }
 

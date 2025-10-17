@@ -1,6 +1,7 @@
 //! Indexed 3D triangle mesh.
 
 use glam::{DVec3, Vec3A};
+use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use obvhs::aabb::Aabb;
 use quickhull::{ConvexHull3d, ConvexHull3dError};
 use rand::{Rng, SeedableRng, distr::Uniform, rngs::StdRng};
@@ -233,6 +234,26 @@ impl IndexedMesh {
                 tri_indices.push(i);
             }
         }
+    }
+
+    /// Computes the minimum distance from the points of this mesh to another mesh.
+    #[inline]
+    pub fn distance_to_mesh(&self, mesh: &IndexedMesh) -> f32 {
+        let points1: Vec<[f32; 3]> = self.vertices.iter().map(|v| v.to_array()).collect();
+        let points2: Vec<[f32; 3]> = mesh.vertices.iter().map(|v| v.to_array()).collect();
+
+        let tree2: ImmutableKdTree<f32, 3> = ImmutableKdTree::new_from_slice(&points2);
+
+        // The squared minimum of the minimum distances.
+        let mut min_dist_sq = f32::MAX;
+
+        // For each point in `self`, compute the minimum distance to `mesh`.
+        for &p in &points1 {
+            let nearest = tree2.nearest_one::<SquaredEuclidean>(&p);
+            min_dist_sq = min_dist_sq.min(nearest.distance);
+        }
+
+        min_dist_sq.sqrt()
     }
 }
 

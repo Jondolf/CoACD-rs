@@ -19,6 +19,7 @@ foldhash = "0.2"
 rand = "0.9"
 kiddo = "5.2"
 thiserror = "2.0"
+rayon = "1.9"
 
 [dev-dependencies]
 # For test scenes and rendering
