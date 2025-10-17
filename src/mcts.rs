@@ -13,7 +13,6 @@ use crate::{
     parameters::CoacdParaneters,
 };
 
-// Assume Plane, IndexedMesh, and Params are defined somewhere
 pub const MCTS_RANDOM_CUT: u32 = 1;
 
 /// A Monte Carlo tree for finding optimal splitting planes using
