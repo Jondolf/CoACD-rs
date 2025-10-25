@@ -608,7 +608,8 @@ fn clip_by_path(
     };
 
     // Iteratively clip the worst part with the remaining planes in the best path.
-    for plane in best_path.iter().skip(1).rev() {
+    for i in 1..best_path.len() {
+        let plane = &best_path[best_path.len() - 1 - i];
         let clip_result = crate::clip::clip(&parts[worst_index], plane)?;
 
         // TODO: Can we avoid converting to a mesh here?
