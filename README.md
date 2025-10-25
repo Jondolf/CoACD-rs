@@ -55,6 +55,11 @@ to showcase the capabilities of the library, not how to use the APIs.
 - Unlike the C++ implementation, we don't provide a runnable binary application yet.
   Instead, you must use this as a library.
 
+## References
+
+- Xinyue Wei, Minghua Liu, et al. 2022. [Approximate Convex Decomposition for 3D Meshes with Collision-Aware Concavity and Tree Search](https://colin97.github.io/CoACD/). *ACM Transactions on Graphics (TOG)* 41, 4 (2022), 1–18.
+- The [CoACD](https://github.com/SarahWeiii/CoACD) C++ implementation by [SarahWeii](https://github.com/SarahWeiii).
+
 ## Licensing
 
 The `coacd` crate is free and open source. All code in this repository is dual-licensed under either:
