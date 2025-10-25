@@ -64,49 +64,49 @@ impl Coacd {
                 .enumerate()
                 .zip(precost_matrix.par_iter_mut())
                 .for_each(|((i, cost), precost)| {
-                // Nearest triangle number index
+                    // Nearest triangle number index
                     let mut p1 = ((8.0 * i as f32 + 1.0).sqrt() as usize - 1) >> 1;
-                // Nearest triangle number from index
-                let sum = (p1 * (p1 + 1)) >> 1;
-                // Modular arithmetic to find the other triangle index
+                    // Nearest triangle number from index
+                    let sum = (p1 * (p1 + 1)) >> 1;
+                    // Modular arithmetic to find the other triangle index
                     let p2 = i - sum;
-                p1 += 1;
+                    p1 += 1;
 
-                let hull1 = &hulls[p1];
-                let hull2 = &hulls[p2];
+                    let hull1 = &hulls[p1];
+                    let hull2 = &hulls[p2];
 
-                let distance = hull1.distance_to_mesh(hull2);
-                if distance < threshold {
-                    let merged_mesh = hull1.merged_with(hull2);
-                    let merged_hull = merged_mesh.compute_convex_hull().unwrap().to_mesh();
+                    let distance = hull1.distance_to_mesh(hull2);
+                    if distance < threshold {
+                        let merged_mesh = hull1.merged_with(hull2);
+                        let merged_hull = merged_mesh.compute_convex_hull().unwrap().to_mesh();
 
                         *cost = cost::compute_concavity_hulls(
-                        hull1,
-                        hull2,
-                        &merged_hull,
-                        self.parameters.seed,
-                        self.parameters.resolution,
-                        self.parameters.rv_k,
-                    );
-                        *precost = f32::max(
-                        cost::compute_concavity(
-                            &meshes[p1],
                             hull1,
-                            self.parameters.seed,
-                            // TODDO: This should probably not be hardcoded.
-                            3000,
-                            self.parameters.rv_k,
-                        ),
-                        cost::compute_concavity(
-                            &meshes[p2],
                             hull2,
+                            &merged_hull,
                             self.parameters.seed,
-                            // TODDO: This should probably not be hardcoded.
-                            3000,
+                            self.parameters.resolution,
                             self.parameters.rv_k,
-                        ),
-                    );
-                }
+                        );
+                        *precost = f32::max(
+                            cost::compute_concavity(
+                                &meshes[p1],
+                                hull1,
+                                self.parameters.seed,
+                                // TODDO: This should probably not be hardcoded.
+                                3000,
+                                self.parameters.rv_k,
+                            ),
+                            cost::compute_concavity(
+                                &meshes[p2],
+                                hull2,
+                                self.parameters.seed,
+                                // TODDO: This should probably not be hardcoded.
+                                3000,
+                                self.parameters.rv_k,
+                            ),
+                        );
+                    }
                 });
 
             let mut cost_size = hulls.len();
@@ -263,6 +263,17 @@ impl Coacd {
         // Normalize the mesh to improve numerical stability.
         let original_aabb = point_cloud::normalize_point_cloud(&mut mesh.vertices);
 
+        // Align the mesh with its principal axes if PCA is enabled.
+        // TODO: This doesn't really work?
+        let mut pca = self
+            .parameters
+            .pca
+            .then(|| point_cloud::Pca::try_from_points(&mesh.vertices, 1e-6).ok())
+            .flatten();
+        if let Some(pca) = &mut pca {
+            pca.apply_transform(&mut mesh.vertices);
+        }
+
         let mut input_parts = vec![mesh];
         let mut hull_parts: Vec<IndexedMesh> = vec![];
         let mut mesh_parts: Vec<IndexedMesh> = vec![];
@@ -331,6 +342,10 @@ impl Coacd {
 
         // Recover the original scale and position of the hulls.
         for hull in &mut hull_parts {
+            // Revert the PCA transformation if applied.
+            if let Some(pca) = &mut pca {
+                pca.revert_transform(&mut hull.vertices);
+            }
             point_cloud::recover_point_cloud(&mut hull.vertices, &original_aabb);
         }
 
