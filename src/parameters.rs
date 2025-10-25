@@ -32,7 +32,7 @@ impl CoacdParaneters {
             seed: 0,
             rv_k: 0.3,
             pca: false,
-            merge_convex_hulls: true,
+            merge_convex_hulls: false,
             max_convex_hulls: None,
             mcts_iterations: 150,
             mcts_max_depth: 3,
