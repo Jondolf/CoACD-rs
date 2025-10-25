@@ -53,7 +53,7 @@ impl IndexedMesh {
         //       so that we don't have to convert between `Vec3A` and `DVec3`?
         //       Would the loss in precision be acceptable?
         // TODO: This can sometimes fail. Could we have a slower, more robust fallback?
-        Ok(quickhull::ConvexHull3d::try_from_points(&points, None).unwrap_or_default())
+        quickhull::ConvexHull3d::try_from_points(&points, None)
     }
 
     /// Merges this mesh with another mesh, returning a new mesh.
