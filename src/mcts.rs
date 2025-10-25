@@ -19,6 +19,7 @@ pub const MCTS_RANDOM_CUT: u32 = 1;
 /// [Monte Carlo Tree Search (MCTS)][MCTS].
 ///
 /// [MCTS]: https://en.wikipedia.org/wiki/Monte_Carlo_tree_search
+#[derive(Clone, Debug)]
 pub struct MonteCarloTree {
     /// All nodes in the Monte Carlo tree.
     nodes: Vec<Node>,
@@ -76,7 +77,7 @@ impl MonteCarloTree {
         let mut best_path = Vec::new();
 
         // Precompute the initial cost for normalization in UCB.
-        let initial_mesh = &self.nodes[root_index.0 as usize].state.initial_part;
+        let initial_mesh = &self.nodes[root_index.0 as usize].state.current_parts[0].current_mesh;
         let initial_hull = initial_mesh
             .compute_convex_hull()
             .expect("Failed to compute convex hull")
@@ -103,7 +104,7 @@ impl MonteCarloTree {
         }
 
         // Select the best child of the root node as the final result.
-        let best_child_index = self.best_child(root_index, false, initial_cost)?;
+        let best_child_index = self.best_child(root_index, false, 0.1)?;
 
         // Get the best node and its associated plane.
         let best_node = &self.nodes[best_child_index.0 as usize];
@@ -111,7 +112,7 @@ impl MonteCarloTree {
 
         // Refine the best plane using ternary search.
         ternary_mcts(
-            &self.nodes[root_index.0 as usize].state.initial_part,
+            &self.nodes[root_index.0 as usize].state.current_parts[0].current_mesh,
             &mut plane,
             &best_path,
             best_node.quality_value,
@@ -237,9 +238,8 @@ impl MonteCarloTree {
             }
 
             // Otherwise, move to the best child node.
-            if let Some(best_child) = self.best_child(current_index, true, initial_cost) {
-                current_index = best_child;
-            }
+            let best_child = self.best_child(current_index, true, initial_cost).unwrap();
+            current_index = best_child;
         }
     }
 
@@ -254,7 +254,7 @@ impl MonteCarloTree {
     ) -> Option<NodeIndex> {
         let node = &self.nodes[node_index.0 as usize];
         let mut best_index = None;
-        let mut best_value = f32::MAX;
+        let mut best_value = f32::INFINITY;
 
         for &child_index in &node.children {
             let child = &self.nodes[child_index.0 as usize];
@@ -323,6 +323,7 @@ impl MonteCarloTree {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeIndex(pub u32);
 
+#[derive(Clone, Debug)]
 pub struct Node {
     parent: Option<NodeIndex>,
     children: Vec<NodeIndex>,
@@ -340,7 +341,7 @@ impl Node {
             state,
             visit_times: 0,
             // TODO: Is this the right initial value?
-            quality_value: f32::MAX,
+            quality_value: f32::INFINITY,
             parent: None,
         }
     }
@@ -356,6 +357,7 @@ impl Node {
 }
 
 /// The state of a [`Node`] in the [`MonteCarloTree`].
+#[derive(Clone, Debug)]
 pub struct NodeState {
     pub current_value: Option<(Plane, u32)>,
     /// Current accumulated score.
@@ -377,7 +379,7 @@ impl NodeState {
     pub fn new(initial_part: IndexedMesh, parameters: &CoacdParaneters) -> Self {
         Self::from_parts(
             initial_part.clone(),
-            vec![f32::MAX],
+            vec![f32::INFINITY],
             vec![Part::new(initial_part, parameters)],
         )
     }
@@ -397,7 +399,7 @@ impl NodeState {
         Self {
             current_value: None,
             current_cost: 0.0,
-            current_score: f32::MAX,
+            current_score: f32::INFINITY,
             current_round: 0,
             initial_part,
             ori_mesh_area,
@@ -509,7 +511,7 @@ impl NodeState {
                 self.current_costs.clone(),
                 self.current_parts.clone(),
             );
-            next_state.current_cost = f32::MAX;
+            next_state.current_cost = f32::INFINITY;
             next_state.current_round = parameters.mcts_max_depth;
 
             Some(next_state)
@@ -518,7 +520,7 @@ impl NodeState {
 }
 
 /// A part of the mesh being considered for splitting.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Part {
     pub current_mesh: IndexedMesh,
     pub current_aabb: Aabb,
@@ -702,8 +704,8 @@ fn ternary_mcts(
             let plane1 = Plane::from_coefficients(1.0, 0.0, 0.0, -mid1);
             let plane2 = Plane::from_coefficients(1.0, 0.0, 0.0, -mid2);
 
-            let cost1 = clip_by_path(mesh, &plane1, best_path, parameters).unwrap_or(f32::MAX);
-            let cost2 = clip_by_path(mesh, &plane2, best_path, parameters).unwrap_or(f32::MAX);
+            let cost1 = clip_by_path(mesh, &plane1, best_path, parameters).unwrap_or(f32::INFINITY);
+            let cost2 = clip_by_path(mesh, &plane2, best_path, parameters).unwrap_or(f32::INFINITY);
 
             if cost1 < cost2 {
                 right = mid2;
@@ -719,7 +721,7 @@ fn ternary_mcts(
         // Evaluate the best plane found during the search.
         let final_plane = Plane::from_coefficients(1.0, 0.0, 0.0, -result);
         let final_cost =
-            clip_by_path(mesh, &final_plane, best_path, parameters).unwrap_or(f32::MAX);
+            clip_by_path(mesh, &final_plane, best_path, parameters).unwrap_or(f32::INFINITY);
 
         // Update the best plane if a better cost is found.
         if final_cost < best_cost {
@@ -750,8 +752,8 @@ fn ternary_mcts(
             let plane1 = Plane::from_coefficients(0.0, 1.0, 0.0, -mid1);
             let plane2 = Plane::from_coefficients(0.0, 1.0, 0.0, -mid2);
 
-            let cost1 = clip_by_path(mesh, &plane1, best_path, parameters).unwrap_or(f32::MAX);
-            let cost2 = clip_by_path(mesh, &plane2, best_path, parameters).unwrap_or(f32::MAX);
+            let cost1 = clip_by_path(mesh, &plane1, best_path, parameters).unwrap_or(f32::INFINITY);
+            let cost2 = clip_by_path(mesh, &plane2, best_path, parameters).unwrap_or(f32::INFINITY);
 
             if cost1 < cost2 {
                 right = mid2;
@@ -767,7 +769,7 @@ fn ternary_mcts(
         // Evaluate the best plane found during the search.
         let final_plane = Plane::from_coefficients(0.0, 1.0, 0.0, -result);
         let final_cost =
-            clip_by_path(mesh, &final_plane, best_path, parameters).unwrap_or(f32::MAX);
+            clip_by_path(mesh, &final_plane, best_path, parameters).unwrap_or(f32::INFINITY);
 
         // Update the best plane if a better cost is found.
         if final_cost < best_cost {
@@ -798,8 +800,8 @@ fn ternary_mcts(
             let plane1 = Plane::from_coefficients(0.0, 0.0, 1.0, -mid1);
             let plane2 = Plane::from_coefficients(0.0, 0.0, 1.0, -mid2);
 
-            let cost1 = clip_by_path(mesh, &plane1, best_path, parameters).unwrap_or(f32::MAX);
-            let cost2 = clip_by_path(mesh, &plane2, best_path, parameters).unwrap_or(f32::MAX);
+            let cost1 = clip_by_path(mesh, &plane1, best_path, parameters).unwrap_or(f32::INFINITY);
+            let cost2 = clip_by_path(mesh, &plane2, best_path, parameters).unwrap_or(f32::INFINITY);
 
             if cost1 < cost2 {
                 right = mid2;
@@ -815,7 +817,7 @@ fn ternary_mcts(
         // Evaluate the best plane found during the search.
         let final_plane = Plane::from_coefficients(0.0, 0.0, 1.0, -result);
         let final_cost =
-            clip_by_path(mesh, &final_plane, best_path, parameters).unwrap_or(f32::MAX);
+            clip_by_path(mesh, &final_plane, best_path, parameters).unwrap_or(f32::INFINITY);
 
         // Update the best plane if a better cost is found.
         if final_cost < best_cost {
@@ -875,11 +877,10 @@ fn find_best_rv_plane(
     }
 
     let mut best_plane = None;
-    let mut best_rv = f32::MAX;
+    let mut best_rv = f32::INFINITY;
 
     for &plane in planes {
         let Some(clip_result) = crate::clip::clip(mesh, &plane) else {
-            best_rv = f32::MAX;
             continue;
         };
 
