@@ -25,7 +25,9 @@ use rand::{
     distr::{Distribution, Uniform},
     rngs::StdRng,
 };
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
+};
 
 use crate::{
     mesh::{ConvexHullExt, IndexedMesh},
@@ -57,17 +59,17 @@ impl Coacd {
             let mut cost_matrix = vec![f32::INFINITY; bound];
             let mut precost_matrix = vec![f32::INFINITY; bound];
 
-            let mut p1;
-            let mut p2;
-
-            // TODO: Parallelize this.
-            for i in 0..bound {
+            cost_matrix
+                .par_iter_mut()
+                .enumerate()
+                .zip(precost_matrix.par_iter_mut())
+                .for_each(|((i, cost), precost)| {
                 // Nearest triangle number index
-                p1 = ((8.0 * i as f32 + 1.0).sqrt() as usize - 1) >> 1;
+                    let mut p1 = ((8.0 * i as f32 + 1.0).sqrt() as usize - 1) >> 1;
                 // Nearest triangle number from index
                 let sum = (p1 * (p1 + 1)) >> 1;
                 // Modular arithmetic to find the other triangle index
-                p2 = i - sum;
+                    let p2 = i - sum;
                 p1 += 1;
 
                 let hull1 = &hulls[p1];
@@ -78,7 +80,7 @@ impl Coacd {
                     let merged_mesh = hull1.merged_with(hull2);
                     let merged_hull = merged_mesh.compute_convex_hull().unwrap().to_mesh();
 
-                    cost_matrix[i] = cost::compute_concavity_hulls(
+                        *cost = cost::compute_concavity_hulls(
                         hull1,
                         hull2,
                         &merged_hull,
@@ -86,7 +88,7 @@ impl Coacd {
                         self.parameters.resolution,
                         self.parameters.rv_k,
                     );
-                    precost_matrix[i] = f32::max(
+                        *precost = f32::max(
                         cost::compute_concavity(
                             &meshes[p1],
                             hull1,
@@ -105,7 +107,7 @@ impl Coacd {
                         ),
                     );
                 }
-            }
+                });
 
             let mut cost_size = hulls.len();
 
@@ -166,7 +168,7 @@ impl Coacd {
 
                 // Update the cost matrix.
                 let hull2 = &hulls[p2];
-                let mut row_index = ((p2 as isize - 1) as usize * p2) >> 1;
+                let mut row_index = ((p2 - 1) * p2) >> 1;
 
                 // Update the costs for the affected rows.
                 for i in 0..p2 {
@@ -232,6 +234,7 @@ impl Coacd {
 
                     row_index += p1;
                     top_row += 1;
+
                     for i in (p1 + 1)..cost_size {
                         cost_matrix[row_index] = cost_matrix[top_row];
                         precost_matrix[row_index] = precost_matrix[top_row];
