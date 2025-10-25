@@ -95,6 +95,7 @@ impl Pca {
         let centroid = points.iter().sum::<Vec3A>() / points.len() as f32;
 
         // Compute the covariance matrix of the points.
+        // TODO: Should we multiply by the reciprocal inside the loop for better numerical stability?
         let mut cov = SymmetricMat3::ZERO;
         for point in points {
             cov += SymmetricMat3::from_outer_product(Vec3::from(*point - centroid));

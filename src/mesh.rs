@@ -1,15 +1,16 @@
 //! Indexed 3D triangle mesh.
 
 use glam::{DVec3, Vec3A};
+use hashbrown::hash_map::Entry;
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use obvhs::aabb::Aabb;
 use quickhull::{ConvexHull3d, ConvexHull3dError};
 use rand::{Rng, SeedableRng, distr::Uniform, rngs::StdRng};
 
-use crate::{Plane, PlaneSide, math};
+use crate::{Plane, PlaneSide, collections::HashMap, hashable_partial_eq::HashablePartialEq, math};
 
 /// A 3D triangle mesh represented by vertices and indices.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct IndexedMesh {
     /// The vertices of the mesh.
     pub vertices: Vec<Vec3A>,
@@ -52,7 +53,7 @@ impl IndexedMesh {
         //       so that we don't have to convert between `Vec3A` and `DVec3`?
         //       Would the loss in precision be acceptable?
         // TODO: This can sometimes fail. Could we have a slower, more robust fallback?
-        quickhull::ConvexHull3d::try_from_points(&points, None)
+        Ok(quickhull::ConvexHull3d::try_from_points(&points, None).unwrap_or_default())
     }
 
     /// Merges this mesh with another mesh, returning a new mesh.
@@ -72,6 +73,43 @@ impl IndexedMesh {
             ]
         }));
         merged
+    }
+
+    /// Merges all duplicate vertices and adjusts the index buffer accordingly.
+    pub fn merge_duplicate_vertices(&mut self) {
+        let mut vtx_to_id = HashMap::default();
+        let mut new_vertices = Vec::with_capacity(self.vertices.len());
+        let mut new_indices = Vec::with_capacity(self.indices.len());
+
+        fn resolve_coord_id(
+            coord: &Vec3A,
+            vtx_to_id: &mut HashMap<HashablePartialEq<Vec3A>, usize>,
+            new_vertices: &mut Vec<Vec3A>,
+        ) -> usize {
+            let key = HashablePartialEq::new(*coord);
+            let id = match vtx_to_id.entry(key) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => entry.insert(new_vertices.len()),
+            };
+
+            if *id == new_vertices.len() {
+                new_vertices.push(*coord);
+            }
+
+            *id
+        }
+
+        for [t0, t1, t2] in self.indices.iter().copied() {
+            let va = resolve_coord_id(&self.vertices[t0], &mut vtx_to_id, &mut new_vertices);
+            let vb = resolve_coord_id(&self.vertices[t1], &mut vtx_to_id, &mut new_vertices);
+            let vc = resolve_coord_id(&self.vertices[t2], &mut vtx_to_id, &mut new_vertices);
+            new_indices.push([va, vb, vc]);
+        }
+
+        new_vertices.shrink_to_fit();
+
+        self.vertices = new_vertices;
+        self.indices = new_indices;
     }
 
     /// Computes the surface area of the mesh.
@@ -173,6 +211,8 @@ impl IndexedMesh {
         samples: &mut Vec<[f32; 3]>,
         tri_indices: &mut Vec<usize>,
     ) {
+        debug_assert_eq!(samples.len(), tri_indices.len());
+
         if resolution == 0 {
             return;
         }
@@ -245,7 +285,7 @@ impl IndexedMesh {
         let tree2: ImmutableKdTree<f32, 3> = ImmutableKdTree::new_from_slice(&points2);
 
         // The squared minimum of the minimum distances.
-        let mut min_dist_sq = f32::MAX;
+        let mut min_dist_sq = f32::INFINITY;
 
         // For each point in `self`, compute the minimum distance to `mesh`.
         for &p in &points1 {

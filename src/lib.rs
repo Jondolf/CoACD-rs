@@ -12,9 +12,10 @@ pub mod hausdorff;
 pub mod mcts;
 pub mod mesh;
 pub mod parameters;
-pub mod pca;
+pub mod point_cloud;
 
 pub(crate) mod collections;
+pub(crate) mod hashable_partial_eq;
 pub(crate) mod math;
 
 pub use math::{Plane, PlaneSide};
@@ -252,7 +253,14 @@ impl Coacd {
     ///
     /// Returns a vector of convex hulls representing the decomposed parts.
     pub fn decompose(&self, mesh: &IndexedMesh) -> Vec<IndexedMesh> {
-        let mut input_parts = vec![mesh.clone()];
+        let mut mesh = mesh.clone();
+
+        mesh.merge_duplicate_vertices();
+
+        // Normalize the mesh to improve numerical stability.
+        let original_aabb = point_cloud::normalize_point_cloud(&mut mesh.vertices);
+
+        let mut input_parts = vec![mesh];
         let mut hull_parts: Vec<IndexedMesh> = vec![];
         let mut mesh_parts: Vec<IndexedMesh> = vec![];
 
@@ -316,6 +324,11 @@ impl Coacd {
         if self.parameters.merge_convex_hulls {
             // TODO: Don't hardcode the threshold here.
             self.merge_convex_hulls(&mesh_parts, &mut hull_parts, 0.1);
+        }
+
+        // Recover the original scale and position of the hulls.
+        for hull in &mut hull_parts {
+            point_cloud::recover_point_cloud(&mut hull.vertices, &original_aabb);
         }
 
         hull_parts
