@@ -132,7 +132,7 @@ pub(crate) fn compute_hb_hulls(
     seed: u64,
     resolution: u32,
 ) -> f32 {
-    if hull1.vertices.is_empty() || hull2.vertices.is_empty() || combined_hull.vertices.is_empty() {
+    if hull1.vertices.len() + hull2.vertices.len() == combined_hull.vertices.len() {
         return 0.0;
     }
 
@@ -140,9 +140,6 @@ pub(crate) fn compute_hb_hulls(
     let mut indices1 = Vec::new();
     let mut samples2 = Vec::new();
     let mut indices2 = Vec::new();
-
-    // Create the merged hull to use for sampling.
-    let merged_hull = hull1.merged_with(hull2);
 
     // Sample points from both meshes.
     extract_point_set(hull1, hull2, seed, resolution, &mut samples1, &mut indices1);
@@ -159,6 +156,9 @@ pub(crate) fn compute_hb_hulls(
     if samples1.is_empty() || samples2.is_empty() {
         return f32::INFINITY;
     }
+
+    // Create the merged hull to use for sampling.
+    let merged_hull = hull1.merged_with(hull2);
 
     face_hausdorff_distance(
         &merged_hull,
@@ -215,25 +215,6 @@ pub(crate) fn compute_concavity_hulls(
     // TODO: Why does the C++ implementation use `resolution + 2000` here?
     let hb = compute_hb_hulls(hull1, hull2, combined_hull, seed, resolution + 2000);
     hb.max(k * rv)
-}
-
-/// Computes the concavity metric (Eq. 6) for a positive and negative mesh given their convex hulls.
-/// The final concavity is the maximum of the two concavities.
-///
-/// See the [module-level documentation](crate::cost) for more details.
-#[inline]
-pub(crate) fn compute_energy(
-    positive_mesh: &IndexedMesh,
-    positive_hull: &IndexedMesh,
-    negative_mesh: &IndexedMesh,
-    negative_hull: &IndexedMesh,
-    seed: u64,
-    resolution: u32,
-    k: f32,
-) -> f32 {
-    let positive_concavity = compute_concavity(positive_mesh, positive_hull, seed, resolution, k);
-    let negative_concavity = compute_concavity(negative_mesh, negative_hull, seed, resolution, k);
-    positive_concavity.max(negative_concavity)
 }
 
 /// Extracts a set of points sampled from the surfaces of two convex hulls.

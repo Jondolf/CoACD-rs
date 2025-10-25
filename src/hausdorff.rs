@@ -29,8 +29,7 @@ pub fn face_hausdorff_distance(
     let tree2: ImmutableKdTree<f32, 3> = ImmutableKdTree::new_from_slice(samples2);
 
     const NUM_NEIGHBORS: NonZero<usize> = NonZero::new(10).unwrap();
-    const FAR_AWAY_NEAREST_NEIGHBOR: f32 = 1e2;
-    const DISTANCE_TOLERANCE: f32 = 1e-14;
+    const DISTANCE_TOLERANCE_SQ: f32 = 1e-14;
 
     // The squared maximum of the minimum distances.
     let mut max_dist_sq = 0.0;
@@ -40,7 +39,6 @@ pub fn face_hausdorff_distance(
     for point in samples2 {
         // Find the nearest neighbors in `mesh1`.
         let results = tree1.nearest_n::<SquaredEuclidean>(point, NUM_NEIGHBORS);
-        let first_distance_squared = results[0].distance;
 
         let p = Vec3A::from_array(*point);
 
@@ -63,18 +61,11 @@ pub fn face_hausdorff_distance(
                 min_dist_sq = dist_sq;
 
                 // TODO: Since the distance is squared, should this threshold be squared too?
-                if min_dist_sq < DISTANCE_TOLERANCE {
+                if min_dist_sq < DISTANCE_TOLERANCE_SQ {
                     // Early out if we're very close.
                     break;
                 }
             }
-        }
-
-        // TODO: Do we need this?
-        if min_dist_sq > FAR_AWAY_NEAREST_NEIGHBOR {
-            // If the minimum distance is much larger than the distance to the nearest neighbor,
-            // we can use the distance to the nearest neighbor as a lower bound.
-            min_dist_sq = first_distance_squared;
         }
 
         if min_dist_sq >= max_dist_sq && min_dist_sq != f32::INFINITY {
@@ -86,7 +77,6 @@ pub fn face_hausdorff_distance(
     for point in samples1 {
         // Find the nearest neighbors in `mesh2`.
         let results = tree2.nearest_n::<SquaredEuclidean>(point, NUM_NEIGHBORS);
-        let first_distance_squared = results[0].distance;
 
         let p = Vec3A::from_array(*point);
 
@@ -108,17 +98,11 @@ pub fn face_hausdorff_distance(
             if dist_sq < min_dist_sq {
                 min_dist_sq = dist_sq;
 
-                if min_dist_sq < DISTANCE_TOLERANCE {
+                if min_dist_sq < DISTANCE_TOLERANCE_SQ {
                     // Early out if we're very close.
                     break;
                 }
             }
-        }
-
-        if min_dist_sq > FAR_AWAY_NEAREST_NEIGHBOR {
-            // If the minimum distance is much larger than the distance to the nearest neighbor,
-            // we can use the distance to the nearest neighbor as a lower bound.
-            min_dist_sq = first_distance_squared;
         }
 
         if min_dist_sq >= max_dist_sq && min_dist_sq != f32::INFINITY {

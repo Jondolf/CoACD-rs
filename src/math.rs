@@ -132,36 +132,6 @@ pub fn tetrahedron_signed_volume(p0: Vec3A, p1: Vec3A, p2: Vec3A) -> f32 {
     (p0.dot(p1.cross(p2))) / 6.0
 }
 
-/// A line segment defined by two points.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct LineSegment {
-    pub a: Vec3A,
-    pub b: Vec3A,
-}
-
-impl LineSegment {
-    // Computes the squared Euclidean distance from a point to the line segment.
-    #[inline]
-    pub fn point_distance_squared(&self, point: Vec3A) -> f32 {
-        let ab = self.b - self.a;
-        let ap = point - self.a;
-        let ab_length_squared = ab.length_squared();
-
-        if ab_length_squared == 0.0 {
-            // The segment is a point.
-            return ap.length();
-        }
-
-        // Project point onto the line defined by the segment, then clamp to the segment.
-        // TODO: CoACD just invalidates points outside the segment. Is that necessary for the algorithm?
-        let t = ap.dot(ab) / ab_length_squared;
-        let t_clamped = t.clamp(0.0, 1.0);
-        let closest_point = self.a + t_clamped * ab;
-
-        (point - closest_point).length_squared()
-    }
-}
-
 /// Finds the point closest to the given `point` on a triangle ABC.
 ///
 /// The Voronoi regions are A, B, C, AB, BC, AC, and ABC.
