@@ -110,9 +110,12 @@ impl MonteCarloTree {
         let best_node = &self.nodes[best_child_index.0 as usize];
         let mut plane = best_node.state.current_value.expect("No plane found").0;
 
+        let root_node_initial_part = self.nodes[root_index.0 as usize].state.initial_part();
+
         // Refine the best plane using ternary search.
-        ternary_mcts(
-            &self.nodes[root_index.0 as usize].state.current_parts[0].current_mesh,
+        ternary_refine_plane(
+            &root_node_initial_part.current_mesh,
+            root_node_initial_part.current_aabb,
             &mut plane,
             &best_path,
             best_node.quality_value,
@@ -124,6 +127,7 @@ impl MonteCarloTree {
     }
 
     /// Expands the given node by adding a new child node with a random move.
+    #[inline]
     fn expand_node(&mut self, node_index: NodeIndex, parameters: &CoacdParaneters) -> NodeIndex {
         let node = &mut self.nodes[node_index.0 as usize];
 
@@ -136,6 +140,9 @@ impl MonteCarloTree {
         }
     }
 
+    /// Performs the default policy (simulation) from the given node.
+    ///
+    /// Returns the reward obtained from the simulation.
     fn default_policy(
         &mut self,
         node_index: NodeIndex,
@@ -198,8 +205,16 @@ impl MonteCarloTree {
             current_state.current_costs.push(negative_cost);
 
             // Create new parts for the two new meshes.
-            let positive_part = Part::new(clip_result.positive_mesh, parameters);
-            let negative_part = Part::new(clip_result.negative_mesh, parameters);
+            let positive_part = Part::new(
+                clip_result.positive_mesh,
+                clip_result.positive_aabb,
+                parameters,
+            );
+            let negative_part = Part::new(
+                clip_result.negative_mesh,
+                clip_result.negative_aabb,
+                parameters,
+            );
             current_state.current_parts.push(positive_part);
             current_state.current_parts.push(negative_part);
 
@@ -340,7 +355,6 @@ impl Node {
             children: Vec::new(),
             state,
             visit_times: 0,
-            // TODO: Is this the right initial value?
             quality_value: f32::INFINITY,
             parent: None,
         }
@@ -359,56 +373,45 @@ impl Node {
 /// The state of a [`Node`] in the [`MonteCarloTree`].
 #[derive(Clone, Debug)]
 pub struct NodeState {
-    pub current_value: Option<(Plane, u32)>,
-    /// Current accumulated score.
-    // TODO: Do we need to store all of these? Some might just be computed on-the-fly.
-    pub current_cost: f32,
-    pub current_score: f32,
-    pub current_round: u32,
-    pub initial_part: IndexedMesh,
-    pub ori_mesh_area: f32,
-    pub ori_mesh_volume: f32,
-    pub ori_hull_volume: f32,
-    /// Current costs for each part in `current_parts`.
-    pub current_costs: Vec<f32>,
-    pub current_parts: Vec<Part>,
-    pub worst_part_index: usize,
+    current_value: Option<(Plane, u32)>,
+    current_cost: f32,
+    current_score: f32,
+    current_round: u32,
+    // TODO: Can we combine these two?
+    current_costs: Vec<f32>,
+    current_parts: Vec<Part>,
+    worst_part_index: usize,
 }
 
 impl NodeState {
+    /// Creates a new [`NodeState`] with the given initial mesh and parameters.
+    #[inline]
     pub fn new(initial_part: IndexedMesh, parameters: &CoacdParaneters) -> Self {
+        let initial_aabb = initial_part.compute_aabb();
         Self::from_parts(
-            initial_part.clone(),
             vec![f32::INFINITY],
-            vec![Part::new(initial_part, parameters)],
+            vec![Part::new(initial_part, initial_aabb, parameters)],
         )
     }
 
-    pub fn from_parts(
-        initial_part: IndexedMesh,
-        current_costs: Vec<f32>,
-        current_parts: Vec<Part>,
-    ) -> Self {
-        let ori_mesh_area = initial_part.surface_area();
-        let ori_mesh_volume = initial_part.signed_volume();
-        let ori_hull_volume = initial_part
-            .compute_convex_hull()
-            .expect("Failed to compute convex hull")
-            .volume() as f32;
-
+    /// Creates a new [`NodeState`] from the given costs and parts.
+    #[inline]
+    pub fn from_parts(current_costs: Vec<f32>, current_parts: Vec<Part>) -> Self {
         Self {
             current_value: None,
             current_cost: 0.0,
             current_score: f32::INFINITY,
             current_round: 0,
-            initial_part,
-            ori_mesh_area,
-            ori_mesh_volume,
-            ori_hull_volume,
             current_costs,
             current_parts,
             worst_part_index: 0,
         }
+    }
+
+    /// Returns a reference to the initial part in the current state.
+    #[inline]
+    pub fn initial_part(&self) -> &Part {
+        &self.current_parts[0]
     }
 
     /// Checks if the current state is terminal based on the given parameters.
@@ -420,8 +423,9 @@ impl NodeState {
                 .is_empty()
     }
 
+    /// Updates the current score and worst part index based on the current costs.
+    #[inline]
     pub fn update_score(&mut self) {
-        let mut reward = 0.0;
         let mut max_cost = 0.0;
 
         for (i, &cost) in self.current_costs.iter().enumerate() {
@@ -429,11 +433,8 @@ impl NodeState {
                 max_cost = cost;
                 self.worst_part_index = i;
             }
-            reward += cost;
         }
 
-        // TODO: Wut???  The C++ implementation returns the max cost (like we do currently)
-        //       and ignores the reward variable entirely. Is this a bug or intentional?
         self.current_score = max_cost;
     }
 
@@ -447,6 +448,7 @@ impl NodeState {
         self.current_parts[self.worst_part_index].take_next_move()
     }
 
+    /// Generates the next state by performing a random move from the current state.
     pub fn get_next_state_with_random_choice(
         &mut self,
         parameters: &CoacdParaneters,
@@ -490,14 +492,21 @@ impl NodeState {
             current_costs.push(negative_cost);
 
             // Create new parts for the two new meshes.
-            let positive_part = Part::new(clip_result.positive_mesh, parameters);
-            let negative_part = Part::new(clip_result.negative_mesh, parameters);
+            let positive_part = Part::new(
+                clip_result.positive_mesh,
+                clip_result.positive_aabb,
+                parameters,
+            );
+            let negative_part = Part::new(
+                clip_result.negative_mesh,
+                clip_result.negative_aabb,
+                parameters,
+            );
             current_parts.push(positive_part);
             current_parts.push(negative_part);
 
             // Create the next state.
-            let mut next_state =
-                NodeState::from_parts(self.initial_part.clone(), current_costs, current_parts);
+            let mut next_state = NodeState::from_parts(current_costs, current_parts);
             next_state.current_value = Some((plane, self.worst_part_index as u32));
             next_state.update_score();
             next_state.current_cost = self.current_cost + next_state.current_score;
@@ -506,11 +515,8 @@ impl NodeState {
             Some(next_state)
         } else {
             // If clipping failed, return a terminal state with max cost.
-            let mut next_state = NodeState::from_parts(
-                self.initial_part.clone(),
-                self.current_costs.clone(),
-                self.current_parts.clone(),
-            );
+            let mut next_state =
+                NodeState::from_parts(self.current_costs.clone(), self.current_parts.clone());
             next_state.current_cost = f32::INFINITY;
             next_state.current_round = parameters.mcts_max_depth;
 
@@ -522,18 +528,20 @@ impl NodeState {
 /// A part of the mesh being considered for splitting.
 #[derive(Clone, Debug)]
 pub struct Part {
-    pub current_mesh: IndexedMesh,
-    pub current_aabb: Aabb,
-    pub next_candidate: usize,
-    pub candidate_planes: Vec<Plane>,
+    current_mesh: IndexedMesh,
+    current_aabb: Aabb,
+    next_candidate: usize,
+    candidate_planes: Vec<Plane>,
 }
 
 impl Part {
+    /// Creates a new [`Part`] with the given mesh and parameters.
     #[inline]
-    pub fn new(current_mesh: IndexedMesh, parameters: &CoacdParaneters) -> Self {
-        // TODO: Should this be computed elsewhere?
-        let current_aabb = current_mesh.compute_aabb();
-
+    pub fn new(
+        current_mesh: IndexedMesh,
+        current_aabb: Aabb,
+        parameters: &CoacdParaneters,
+    ) -> Self {
         // Compute candidate planes.
         let mut candidate_planes = Vec::new();
         compute_axis_aligned_planes(current_aabb, parameters.mcts_nodes, &mut candidate_planes);
@@ -553,7 +561,7 @@ impl Part {
     ///
     /// Panics if there are no more candidate planes available.
     #[inline]
-    pub fn take_next_move(&mut self) -> Plane {
+    fn take_next_move(&mut self) -> Plane {
         let plane = self.candidate_planes[self.next_candidate];
         self.next_candidate += 1;
         plane
@@ -662,8 +670,10 @@ fn clip_by_path(
     Some(final_cost)
 }
 
-fn ternary_mcts(
+/// Refines the best plane found during MCTS using ternary search.
+fn ternary_refine_plane(
     mesh: &IndexedMesh,
+    aabb: Aabb,
     best_plane: &mut Plane,
     best_path: &[Plane],
     best_cost: f32,
@@ -673,9 +683,6 @@ fn ternary_mcts(
     if best_path.is_empty() {
         return false;
     }
-
-    // TODO: Store the AABB or pass it as parameter.
-    let aabb = mesh.compute_aabb();
 
     let interval = (aabb.diagonal() / (parameters.mcts_nodes + 1) as f32).max(Vec3A::splat(0.01));
     let min_interval = 0.01;
