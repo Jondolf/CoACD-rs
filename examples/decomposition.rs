@@ -126,10 +126,7 @@ fn spawn_convex_decomposition(
 
         // Decompose the mesh using CoACD.
         let coacd = Coacd {
-            parameters: CoacdParaneters {
-                threshold: 0.03,
-                ..default()
-            },
+            parameters: CoacdParaneters::new(0.03),
         };
         let parts = coacd.decompose(&indexed_mesh);
 

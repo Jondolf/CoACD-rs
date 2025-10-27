@@ -34,7 +34,9 @@ use crate::{
     parameters::CoacdParaneters,
 };
 
+/// The [CoACD](crate::Coacd) convex decomposition algorithm.
 pub struct Coacd {
+    /// Parameters for tuning the decomposition process.
     pub parameters: CoacdParaneters,
 }
 
@@ -124,24 +126,29 @@ impl Coacd {
 
                 if let Some(max_hulls) = self.parameters.max_convex_hulls {
                     // Stop merging if the maximum number of hulls is reached and the minimum cost is above the threshold.
-                    if hulls.len() as u32 <= max_hulls && min_cost > self.parameters.threshold {
+                    if hulls.len() as u32 <= max_hulls
+                        && min_cost > self.parameters.concavity_threshold
+                    {
                         break;
                     }
                     // Avoid merging parts that have already used up the threshold.
                     if hulls.len() as u32 <= max_hulls
                         && min_cost
-                            > (self.parameters.threshold - precost_matrix[min_cost_i]).max(0.01)
+                            > (self.parameters.concavity_threshold - precost_matrix[min_cost_i])
+                                .max(0.01)
                     {
                         cost_matrix[min_cost_i] = f32::INFINITY;
                         continue;
                     }
                 } else {
                     // Stop merging if the minimum cost is above the threshold.
-                    if min_cost > self.parameters.threshold {
+                    if min_cost > self.parameters.concavity_threshold {
                         break;
                     }
                     // Avoid merging parts that have already used up the threshold.
-                    if min_cost > (self.parameters.threshold - precost_matrix[min_cost_i]).max(0.01)
+                    if min_cost
+                        > (self.parameters.concavity_threshold - precost_matrix[min_cost_i])
+                            .max(0.01)
                     {
                         cost_matrix[min_cost_i] = f32::INFINITY;
                         continue;
@@ -297,7 +304,7 @@ impl Coacd {
                         self.parameters.rv_k,
                     );
 
-                    if concavity > self.parameters.threshold {
+                    if concavity > self.parameters.concavity_threshold {
                         // Find cutting plane using MCTS.
                         let mut tree = mcts::MonteCarloTree::new(part.clone(), &self.parameters);
 

@@ -684,7 +684,8 @@ fn ternary_refine_plane(
         return false;
     }
 
-    let interval = (aabb.diagonal() / (parameters.mcts_nodes + 1) as f32).max(Vec3A::splat(0.01));
+    let interval =
+        (aabb.diagonal() / (parameters.mcts_max_nodes + 1) as f32).max(Vec3A::splat(0.01));
     let min_interval = 0.01;
     let threshold = 10;
 
