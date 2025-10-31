@@ -35,11 +35,11 @@ fn setup(
         indices: match mesh.indices().unwrap() {
             Indices::U16(indices) => indices
                 .chunks(3)
-                .map(|chunk| [chunk[0] as usize, chunk[1] as usize, chunk[2] as usize])
+                .map(|chunk| [chunk[0] as u32, chunk[1] as u32, chunk[2] as u32])
                 .collect(),
             Indices::U32(indices) => indices
                 .chunks(3)
-                .map(|chunk| [chunk[0] as usize, chunk[1] as usize, chunk[2] as usize])
+                .map(|chunk| [chunk[0], chunk[1], chunk[2]])
                 .collect(),
         },
     };
@@ -60,7 +60,8 @@ fn setup(
         .positive_mesh
         .indices
         .iter()
-        .flat_map(|i| i.iter().map(|&idx| idx as u32))
+        .flatten()
+        .copied()
         .collect();
     let mut positive_mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -81,7 +82,8 @@ fn setup(
         .negative_mesh
         .indices
         .iter()
-        .flat_map(|i| i.iter().map(|&idx| idx as u32))
+        .flatten()
+        .copied()
         .collect();
     let mut negative_mesh = Mesh::new(
         PrimitiveTopology::TriangleList,

@@ -7,11 +7,7 @@
 use glam::Vec3A;
 use obvhs::aabb::Aabb;
 
-use crate::{
-    Plane, cost,
-    mesh::{ConvexHullExt, IndexedMesh},
-    parameters::CoacdParaneters,
-};
+use crate::{Plane, cost, mesh::IndexedMesh, parameters::CoacdParaneters};
 
 pub const MCTS_RANDOM_CUT: u32 = 1;
 
@@ -80,8 +76,7 @@ impl MonteCarloTree {
         let initial_mesh = &self.nodes[root_index.0 as usize].state.current_parts[0].current_mesh;
         let initial_hull = initial_mesh
             .compute_convex_hull()
-            .expect("Failed to compute convex hull")
-            .to_mesh();
+            .expect("Failed to compute convex hull");
         let initial_cost = parameters.rv_k * cost::compute_rv(initial_mesh, &initial_hull)
             / parameters.mcts_max_depth as f32;
 
@@ -180,13 +175,11 @@ impl MonteCarloTree {
             let positive_hull = clip_result
                 .positive_mesh
                 .compute_convex_hull()
-                .expect("Failed to compute convex hull")
-                .to_mesh();
+                .expect("Failed to compute convex hull");
             let negative_hull = clip_result
                 .negative_mesh
                 .compute_convex_hull()
-                .expect("Failed to compute convex hull")
-                .to_mesh();
+                .expect("Failed to compute convex hull");
 
             // Remove the worst part from the current state.
             current_state
@@ -461,16 +454,8 @@ impl NodeState {
         if let Some(clip_result) = crate::clip::clip(&worst_part.current_mesh, &plane) {
             // TODO: Can we avoid converting to a mesh here?
             // TODO: These should never fail ideally. But if they do, we should handle it more gracefully.
-            let positive_hull = clip_result
-                .positive_mesh
-                .compute_convex_hull()
-                .ok()?
-                .to_mesh();
-            let negative_hull = clip_result
-                .negative_mesh
-                .compute_convex_hull()
-                .ok()?
-                .to_mesh();
+            let positive_hull = clip_result.positive_mesh.compute_convex_hull().ok()?;
+            let negative_hull = clip_result.negative_mesh.compute_convex_hull().ok()?;
 
             let mut current_costs = Vec::with_capacity(self.current_costs.len());
             let mut current_parts = Vec::with_capacity(self.current_parts.len());
@@ -593,16 +578,8 @@ fn clip_by_path(
     let clip_result = crate::clip::clip(mesh, first_plane)?;
 
     // TODO: Can we avoid converting to a mesh here?
-    let positive_hull = clip_result
-        .positive_mesh
-        .compute_convex_hull()
-        .ok()?
-        .to_mesh();
-    let negative_hull = clip_result
-        .negative_mesh
-        .compute_convex_hull()
-        .ok()?
-        .to_mesh();
+    let positive_hull = clip_result.positive_mesh.compute_convex_hull().ok()?;
+    let negative_hull = clip_result.negative_mesh.compute_convex_hull().ok()?;
 
     let positive_cost =
         parameters.rv_k * cost::compute_rv(&clip_result.positive_mesh, &positive_hull);
@@ -627,16 +604,8 @@ fn clip_by_path(
         let clip_result = crate::clip::clip(&parts[worst_index], plane)?;
 
         // TODO: Can we avoid converting to a mesh here?
-        let positive_hull = clip_result
-            .positive_mesh
-            .compute_convex_hull()
-            .ok()?
-            .to_mesh();
-        let negative_hull = clip_result
-            .negative_mesh
-            .compute_convex_hull()
-            .ok()?
-            .to_mesh();
+        let positive_hull = clip_result.positive_mesh.compute_convex_hull().ok()?;
+        let negative_hull = clip_result.negative_mesh.compute_convex_hull().ok()?;
 
         let positive_cost =
             parameters.rv_k * cost::compute_rv(&clip_result.positive_mesh, &positive_hull);
@@ -906,10 +875,6 @@ fn find_best_rv_plane(
             clip_result.positive_mesh.compute_convex_hull(),
             clip_result.negative_mesh.compute_convex_hull(),
         ) {
-            // TODO: Can we avoid converting to a mesh here?
-            let positive_hull = positive_hull.to_mesh();
-            let negative_hull = negative_hull.to_mesh();
-
             // TODO: Technically we don't need to multiply by `rv_k` here since we're just comparing costs.
             let rv = parameters.rv_k
                 * cost::compute_total_rv(

@@ -114,13 +114,13 @@ fn spawn_convex_decomposition(
             .iter()
             .map(|&v| vec3a(v[0], v[1], v[2]))
             .collect::<Vec<_>>();
-        let indices: Vec<[usize; 3]> = mesh
+        let indices: Vec<[u32; 3]> = mesh
             .indices()
             .unwrap()
             .iter()
             .collect::<Vec<_>>()
             .chunks(3)
-            .map(|chunk| [chunk[0], chunk[1], chunk[2]])
+            .map(|chunk| [chunk[0] as u32, chunk[1] as u32, chunk[2] as u32])
             .collect();
         let indexed_mesh = IndexedMesh { vertices, indices };
 
@@ -134,11 +134,7 @@ fn spawn_convex_decomposition(
         for part in parts {
             let mesh_vertices: Vec<[f32; 3]> =
                 part.vertices.iter().map(|v| [v.x, v.y, v.z]).collect();
-            let mesh_indices: Vec<u32> = part
-                .indices
-                .iter()
-                .flat_map(|tri| tri.iter().map(|&i| i as u32))
-                .collect();
+            let mesh_indices: Vec<u32> = part.indices.iter().flatten().copied().collect();
 
             // Create a mesh from the hull.
             let hull_mesh = Mesh::new(

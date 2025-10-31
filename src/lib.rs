@@ -29,10 +29,7 @@ use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator,
 };
 
-use crate::{
-    mesh::{ConvexHullExt, IndexedMesh},
-    parameters::CoacdParaneters,
-};
+use crate::{mesh::IndexedMesh, parameters::CoacdParaneters};
 
 /// The [CoACD](crate::Coacd) convex decomposition algorithm.
 pub struct Coacd {
@@ -80,7 +77,7 @@ impl Coacd {
                     let distance = hull1.distance_to_mesh(hull2);
                     if distance < threshold {
                         let merged_mesh = hull1.merged_with(hull2);
-                        let merged_hull = merged_mesh.compute_convex_hull().unwrap().to_mesh();
+                        let merged_hull = merged_mesh.compute_convex_hull().unwrap();
 
                         *cost = cost::compute_concavity_hulls(
                             hull1,
@@ -167,7 +164,7 @@ impl Coacd {
 
                 // Construct a new hull from the lowest cost row and column.
                 let merged_mesh = hulls[p1].merged_with(&hulls[p2]);
-                let merged_hull = merged_mesh.compute_convex_hull().unwrap().to_mesh();
+                let merged_hull = merged_mesh.compute_convex_hull().unwrap();
                 hulls[p2] = merged_hull;
                 hulls.swap_remove(p1);
 
@@ -183,7 +180,7 @@ impl Coacd {
                     let distance = hull2.distance_to_mesh(hull_i);
                     if distance < threshold {
                         let merged_mesh = hull2.merged_with(hull_i);
-                        let merged_hull = merged_mesh.compute_convex_hull().unwrap().to_mesh();
+                        let merged_hull = merged_mesh.compute_convex_hull().unwrap();
                         cost_matrix[row_index] = cost::compute_concavity_hulls(
                             hull2,
                             hull_i,
@@ -208,7 +205,7 @@ impl Coacd {
                     let distance = hull2.distance_to_mesh(hull_i);
                     if distance < threshold {
                         let merged_mesh = hull2.merged_with(hull_i);
-                        let merged_hull = merged_mesh.compute_convex_hull().unwrap().to_mesh();
+                        let merged_hull = merged_mesh.compute_convex_hull().unwrap();
                         cost_matrix[row_index] = cost::compute_concavity_hulls(
                             hull2,
                             hull_i,
@@ -290,7 +287,7 @@ impl Coacd {
                 .into_par_iter()
                 .map(|part| {
                     // Compute the convex hull.
-                    let hull = part.compute_convex_hull().unwrap().to_mesh();
+                    let hull = part.compute_convex_hull().unwrap();
 
                     let mut rng = StdRng::seed_from_u64(self.parameters.seed);
                     let seed_dist = Uniform::<u64>::new(0, 1000).unwrap();

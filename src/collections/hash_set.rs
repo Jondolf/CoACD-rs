@@ -1,9 +1,6 @@
 use crate::collections::FixedHasher;
 use core::ops::{Deref, DerefMut};
 
-/// A type alias for [`Entry`](hashbrown::hash_set::Entry) with [`FixedHasher`] as the hashing provider.
-pub type Entry<'a, K, V> = hashbrown::hash_set::Entry<'a, K, V, FixedHasher>;
-
 /// A new-type for [`HashSet`](hashbrown::HashSet) with [`FixedHasher`] as the hashing provider.
 /// Can be trivially converted to and from a [hashbrown] [`HashSet`](hashbrown::HashSet) using [`From`].
 ///
@@ -40,12 +37,6 @@ where
 }
 
 impl<K> HashSet<K> {
-    /// Creates an empty [`HashSet`].
-    #[inline]
-    pub const fn new() -> Self {
-        Self(hashbrown::HashSet::with_hasher(FixedHasher))
-    }
-
     /// Creates an empty [`HashSet`] with the specified capacity.
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {

@@ -1,9 +1,6 @@
 use crate::collections::FixedHasher;
 use core::ops::{Deref, DerefMut};
 
-/// A type alias for [`Entry`](hashbrown::hash_map::Entry) with [`FixedHasher`] as the hashing provider.
-pub type Entry<'a, K, V> = hashbrown::hash_map::Entry<'a, K, V, FixedHasher>;
-
 /// A new-type for [`HashMap`](hashbrown::HashMap) with [`FixedHasher`] as the hashing provider.
 /// Can be trivially converted to and from a [hashbrown] [`HashMap`](hashbrown::HashMap) using [`From`].
 ///

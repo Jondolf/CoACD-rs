@@ -1,10 +1,10 @@
 //! Indexed 3D triangle mesh.
 
-use glam::{DVec3, Vec3A};
+use glam::Vec3A;
 use hashbrown::hash_map::Entry;
 use kiddo::{ImmutableKdTree, SquaredEuclidean};
 use obvhs::aabb::Aabb;
-use quickhull::{ConvexHull3d, ConvexHull3dError};
+use quickhull::ConvexHull3dError;
 use rand::{Rng, SeedableRng, distr::Uniform, rngs::StdRng};
 
 use crate::{Plane, PlaneSide, collections::HashMap, hashable_partial_eq::HashablePartialEq, math};
@@ -15,7 +15,7 @@ pub struct IndexedMesh {
     /// The vertices of the mesh.
     pub vertices: Vec<Vec3A>,
     /// The indices of the mesh.
-    pub indices: Vec<[usize; 3]>,
+    pub indices: Vec<[u32; 3]>,
 }
 
 impl IndexedMesh {
@@ -40,20 +40,14 @@ impl IndexedMesh {
 
     /// Computes the convex hull of the mesh.
     #[inline]
-    pub fn compute_convex_hull(&self) -> Result<ConvexHull3d, ConvexHull3dError> {
-        // Convert the vertices to `DVec3` for higher precision during hull computation.
-        let points = self
-            .vertices
-            .iter()
-            .map(|v| DVec3::new(v.x as f64, v.y as f64, v.z as f64))
-            .collect::<Vec<_>>();
-
-        // Use the `quickhull` crate to compute the convex hull.
-        // TODO: Could we make the Quickhull algorithm generic over the vector type
-        //       so that we don't have to convert between `Vec3A` and `DVec3`?
-        //       Would the loss in precision be acceptable?
-        // TODO: This can sometimes fail. Could we have a slower, more robust fallback?
-        quickhull::ConvexHull3d::try_from_points(&points, None)
+    pub fn compute_convex_hull(&self) -> Result<IndexedMesh, ConvexHull3dError> {
+        if self.vertices.len() < 4 {
+            return Ok(IndexedMesh::default());
+        }
+        quickhull::ConvexHull3d::try_from_points(&self.vertices, None).map(|hull| {
+            let (vertices, indices) = hull.vertices_indices();
+            IndexedMesh { vertices, indices }
+        })
     }
 
     /// Merges this mesh with another mesh, returning a new mesh.
@@ -63,7 +57,7 @@ impl IndexedMesh {
     #[inline]
     pub fn merged_with(&self, other: &IndexedMesh) -> IndexedMesh {
         let mut merged = self.clone();
-        let base_index = merged.vertices.len();
+        let base_index = merged.vertices.len() as u32;
         merged.vertices.extend_from_slice(&other.vertices);
         merged.indices.extend(other.indices.iter().map(|tri| {
             [
@@ -83,16 +77,16 @@ impl IndexedMesh {
 
         fn resolve_coord_id(
             coord: &Vec3A,
-            vtx_to_id: &mut HashMap<HashablePartialEq<Vec3A>, usize>,
+            vtx_to_id: &mut HashMap<HashablePartialEq<Vec3A>, u32>,
             new_vertices: &mut Vec<Vec3A>,
-        ) -> usize {
+        ) -> u32 {
             let key = HashablePartialEq::new(*coord);
             let id = match vtx_to_id.entry(key) {
                 Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => entry.insert(new_vertices.len()),
+                Entry::Vacant(entry) => entry.insert(new_vertices.len() as u32),
             };
 
-            if *id == new_vertices.len() {
+            if *id == new_vertices.len() as u32 {
                 new_vertices.push(*coord);
             }
 
@@ -100,9 +94,21 @@ impl IndexedMesh {
         }
 
         for [t0, t1, t2] in self.indices.iter().copied() {
-            let va = resolve_coord_id(&self.vertices[t0], &mut vtx_to_id, &mut new_vertices);
-            let vb = resolve_coord_id(&self.vertices[t1], &mut vtx_to_id, &mut new_vertices);
-            let vc = resolve_coord_id(&self.vertices[t2], &mut vtx_to_id, &mut new_vertices);
+            let va = resolve_coord_id(
+                &self.vertices[t0 as usize],
+                &mut vtx_to_id,
+                &mut new_vertices,
+            );
+            let vb = resolve_coord_id(
+                &self.vertices[t1 as usize],
+                &mut vtx_to_id,
+                &mut new_vertices,
+            );
+            let vc = resolve_coord_id(
+                &self.vertices[t2 as usize],
+                &mut vtx_to_id,
+                &mut new_vertices,
+            );
             new_indices.push([va, vb, vc]);
         }
 
@@ -115,12 +121,15 @@ impl IndexedMesh {
     /// Computes the surface area of the mesh.
     #[inline]
     pub fn surface_area(&self) -> f32 {
-        self.indices.iter().fold(0.0, |acc, tri| {
-            let v0 = self.vertices[tri[0]];
-            let v1 = self.vertices[tri[1]];
-            let v2 = self.vertices[tri[2]];
-            acc + math::triangle_area(v0, v1, v2)
-        })
+        self.indices
+            .iter()
+            .map(|tri| {
+                let v0 = self.vertices[tri[0] as usize];
+                let v1 = self.vertices[tri[1] as usize];
+                let v2 = self.vertices[tri[2] as usize];
+                math::triangle_area(v0, v1, v2)
+            })
+            .sum()
     }
 
     /// Computes the signed volume of the mesh.
@@ -130,12 +139,15 @@ impl IndexedMesh {
     #[inline]
     pub fn signed_volume(&self) -> f32 {
         // Compute the signed volume of the mesh using the divergence theorem.
-        self.indices.iter().fold(0.0, |acc, tri| {
-            let v0 = self.vertices[tri[0]];
-            let v1 = self.vertices[tri[1]];
-            let v2 = self.vertices[tri[2]];
-            acc + math::tetrahedron_signed_volume(v0, v1, v2)
-        })
+        self.indices
+            .iter()
+            .map(|tri| {
+                let v0 = self.vertices[tri[0] as usize];
+                let v1 = self.vertices[tri[1] as usize];
+                let v2 = self.vertices[tri[2] as usize];
+                math::tetrahedron_signed_volume(v0, v1, v2)
+            })
+            .sum()
     }
 
     /// Finds a separating plane between this convex mesh and another convex mesh, if one exists.
@@ -150,9 +162,9 @@ impl IndexedMesh {
         // Check all triangles in `self` as potential separating planes.
         // TODO: Should we pick the mesh with fewer faces to iterate over?
         for tri in &self.indices {
-            let v0 = self.vertices[tri[0]];
-            let v1 = self.vertices[tri[1]];
-            let v2 = self.vertices[tri[2]];
+            let v0 = self.vertices[tri[0] as usize];
+            let v1 = self.vertices[tri[1] as usize];
+            let v2 = self.vertices[tri[2] as usize];
             let normal = math::triangle_normal(v0, v1, v2);
             let plane = Plane::from_point_and_normal(v0, normal);
 
@@ -227,9 +239,9 @@ impl IndexedMesh {
         let seed_dist = Uniform::<u32>::new(0, 1000).unwrap();
 
         for (i, tri) in self.indices.iter().enumerate() {
-            let v0 = self.vertices[tri[0]];
-            let v1 = self.vertices[tri[1]];
-            let v2 = self.vertices[tri[2]];
+            let v0 = self.vertices[tri[0] as usize];
+            let v1 = self.vertices[tri[1] as usize];
+            let v2 = self.vertices[tri[2] as usize];
 
             // Skip triangles that lie exactly on the plane (if provided).
             if plane.is_some_and(|p| {
@@ -308,26 +320,4 @@ fn r2_sequence(n: u32, seed: u32) -> [f32; 2] {
         (seed as f32 + FRAC_1_PLASTIC * n as f32) % 1.0,
         (seed as f32 + FRAC_1_PLASTIC_SQUARED * n as f32) % 1.0,
     ]
-}
-
-/// An extension trait for convex hulls.
-pub trait ConvexHullExt {
-    /// Converts the convex hull to an [`IndexedMesh`].
-    fn to_mesh(&self) -> IndexedMesh;
-}
-
-impl ConvexHullExt for ConvexHull3d {
-    fn to_mesh(&self) -> IndexedMesh {
-        let indices = self
-            .triangles()
-            .map(|tri| tri.indices())
-            .collect::<Vec<_>>();
-        let vertices = self
-            .points_ref()
-            .iter()
-            .map(|v| Vec3A::new(v.x as f32, v.y as f32, v.z as f32))
-            .collect::<Vec<_>>();
-
-        IndexedMesh { vertices, indices }
-    }
 }

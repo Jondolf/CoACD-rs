@@ -49,9 +49,9 @@ pub fn face_hausdorff_distance(
             // Get the triangle corresponding to the nearest neighbor.
             let idx = nearest_neighbor.item as usize;
             let tri = &mesh1.indices[indices1[idx]];
-            let v0 = mesh1.vertices[tri[0]];
-            let v1 = mesh1.vertices[tri[1]];
-            let v2 = mesh1.vertices[tri[2]];
+            let v0 = mesh1.vertices[tri[0] as usize];
+            let v1 = mesh1.vertices[tri[1] as usize];
+            let v2 = mesh1.vertices[tri[2] as usize];
 
             // Project the point onto the triangle and compute the squared distance.
             let projection = crate::math::project_on_triangle_3d(v0, v1, v2, p);
@@ -87,9 +87,9 @@ pub fn face_hausdorff_distance(
             // Get the triangle corresponding to the nearest neighbor.
             let idx = nearest_neighbor.item as usize;
             let tri = &mesh2.indices[indices2[idx]];
-            let v0 = mesh2.vertices[tri[0]];
-            let v1 = mesh2.vertices[tri[1]];
-            let v2 = mesh2.vertices[tri[2]];
+            let v0 = mesh2.vertices[tri[0] as usize];
+            let v1 = mesh2.vertices[tri[1] as usize];
+            let v2 = mesh2.vertices[tri[2] as usize];
 
             // Project the point onto the triangle and compute the squared distance.
             let projection = crate::math::project_on_triangle_3d(v0, v1, v2, p);

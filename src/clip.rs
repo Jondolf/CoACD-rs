@@ -459,6 +459,10 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
     let mut vertex_map: HashMap<usize, usize> = HashMap::new();
 
     for [id0, id1, id2] in mesh.indices.iter().copied() {
+        let id0 = id0 as usize;
+        let id1 = id1 as usize;
+        let id2 = id2 as usize;
+
         let p0 = mesh.vertices[id0];
         let p1 = mesh.vertices[id1];
         let p2 = mesh.vertices[id2];
@@ -914,12 +918,20 @@ pub fn clip(mesh: &IndexedMesh, plane: &Plane) -> Option<ClipResult> {
     Some(ClipResult {
         positive_mesh: IndexedMesh {
             vertices: positive_vertices,
-            indices: cast_indices_isize_to_usize(positive_indices),
+            // TODO: Avoid this allocation.
+            indices: cast_indices_isize_to_usize(positive_indices)
+                .iter()
+                .map(|[a, b, c]| [*a as u32, *b as u32, *c as u32])
+                .collect(),
         },
         positive_aabb,
         negative_mesh: IndexedMesh {
             vertices: negative_vertices,
-            indices: cast_indices_isize_to_usize(negative_indices),
+            // TODO: Avoid this allocation.
+            indices: cast_indices_isize_to_usize(negative_indices)
+                .iter()
+                .map(|[a, b, c]| [*a as u32, *b as u32, *c as u32])
+                .collect(),
         },
         negative_aabb,
         cut_area,
