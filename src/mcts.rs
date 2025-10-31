@@ -544,7 +544,11 @@ impl Part {
     ) -> Self {
         // Compute candidate planes.
         let mut candidate_planes = Vec::new();
-        compute_axis_aligned_planes(current_aabb, parameters.mcts_nodes, &mut candidate_planes);
+        compute_axis_aligned_planes(
+            current_aabb,
+            parameters.mcts_max_nodes,
+            &mut candidate_planes,
+        );
 
         Self {
             current_mesh,
