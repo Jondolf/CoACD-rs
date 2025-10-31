@@ -168,6 +168,8 @@ impl CoacdParaneters {
     pub const fn new(concavity_threshold: f32) -> Self {
         Self {
             concavity_threshold,
+            // This shouldn't be too low for low concavity thresholds to work well.
+            mcts_max_nodes: 20,
             ..Self::FAST
         }
     }
